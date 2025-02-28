@@ -45,7 +45,8 @@ class RentalRequestController extends Controller
             'latestRejection.rejectionReason',
             'latestCancellation.cancellationReason',
             'payment_request',
-            'timelineEvents'
+            'timelineEvents',
+            'pickupSchedules' // Add this line
         ]);
 
         // Determine user role
@@ -72,6 +73,7 @@ class RentalRequestController extends Controller
         return Inertia::render('RentalDetails', [
             'rental' => $rental,
             'userRole' => $userRole,
+            'pickupSchedules' => $rental->pickupSchedules, // Add this line
             ...$reasons
         ]);        
     }

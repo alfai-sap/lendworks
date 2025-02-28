@@ -132,6 +132,11 @@ class RentalRequest extends Model
         return $this->hasMany(HandoverProof::class);
     }
 
+    public function pickupSchedules()
+    {
+        return $this->hasMany(PickupSchedule::class);
+    }
+
     // Accessors
     public function getHasStartedAttribute(): bool
     {

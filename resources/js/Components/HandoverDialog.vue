@@ -18,6 +18,10 @@ const props = defineProps({
     type: {
         type: String,
         validator: (value) => ['handover', 'receive'].includes(value)
+    },
+    pickupSchedules: {
+        type: Array,
+        default: () => []
     }
 });
 
@@ -48,11 +52,14 @@ const handleSubmit = () => {
 
 <template>
     <Dialog :open="show" @update:open="$emit('update:show', $event)">
-        <DialogContent class="sm:max-w-md">
+        <DialogContent class="sm:max-w-lg">
             <DialogHeader>
                 <DialogTitle>{{ type === 'handover' ? 'Hand Over Item' : 'Receive Item' }}</DialogTitle>
                 <DialogDescription>
-                    Please provide a photo as proof of {{ type === 'handover' ? 'handover' : 'receiving the item' }}.
+                    {{ type === 'handover' 
+                        ? 'Please provide proof of item handover to the renter.' 
+                        : 'Please confirm that you have received the item from the lender.' 
+                    }}
                 </DialogDescription>
             </DialogHeader>
 

@@ -15,12 +15,17 @@ import RentalTimeline from "@/Components/RentalTimeline.vue";
 import { Link } from "@inertiajs/vue3";
 import PaymentDialog from "@/Components/PaymentDialog.vue";
 import HandoverDialog from "@/Components/HandoverDialog.vue";
+import PickupScheduleManager from "@/Components/PickupScheduleManager.vue";
 
 const props = defineProps({
 	rental: Object,
 	userRole: String,
 	rejectionReasons: Array,
 	cancellationReasons: Array,
+	pickupSchedules: {
+		type: Array,
+		default: () => []
+	}
 });
 
 // Computed properties for role-specific content
@@ -131,6 +136,9 @@ const showPaymentDialog = ref(false);
 
 // list of actions available for the rental as defined in the model
 const actions = computed(() => props.rental.available_actions);
+
+// Add computed property to check if user is lender
+const isLender = computed(() => props.userRole === 'lender');
 </script>
 
 <template>
@@ -304,6 +312,22 @@ const actions = computed(() => props.rental.available_actions);
 								</div>
 							</div>
 						</div>
+					</CardContent>
+				</Card>
+
+				<!-- Add Pickup Schedule section for lenders -->
+				<Card v-if="isLender && rental.status === 'to_handover'" class="shadow-sm">
+					<CardHeader class="bg-card border-b">
+						<CardTitle>Pickup Schedule</CardTitle>
+						<CardDescription>
+							Set up available pickup dates and times for the renter.
+						</CardDescription>
+					</CardHeader>
+					<CardContent class="p-6">
+						<PickupScheduleManager
+							:rental-id="rental.id"
+							:schedules="pickupSchedules"
+						/>
 					</CardContent>
 				</Card>
 			</div>
