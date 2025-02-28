@@ -108,14 +108,19 @@ const actions = computed(() => props.rental.available_actions);
 				</Button>
 
 				<!-- Handover Actions -->
-				<Button
-					v-if="actions.canReceive"
-					variant="default"
-					size="sm"
-					@click.stop="showHandoverDialog = true"
-				>
-					Confirm Receipt
-				</Button>
+				<div v-if="actions.canReceive">
+					<Button
+						variant="default"
+						size="sm"
+						:disabled="!actions.hasPickupSchedule"
+						@click.stop="showHandoverDialog = true"
+					>
+						Confirm Receipt
+					</Button>
+					<p v-if="!actions.hasPickupSchedule" class="text-muted-foreground text-xs mt-1">
+						Waiting for pickup schedule
+					</p>
+				</div>
 
 				<!-- Cancel Action -->
 				<Button

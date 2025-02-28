@@ -152,14 +152,19 @@ const paymentRequest = computed(() => props.data.rental_request.payment_request)
 					Cancel Request
 				</Button>
 
-				<Button
-					v-if="actions.canHandover"
-					variant="default"
-					size="sm"
-					@click.stop="showHandoverDialog = true"
-				>
-					Hand Over Item
-				</Button>
+				<div v-if="actions.canHandover">
+					<Button
+						variant="default"
+						size="sm"
+						:disabled="!actions.hasPickupSchedule"
+						@click.stop="showHandoverDialog = true"
+					>
+						Hand Over Item
+					</Button>
+					<p v-if="!actions.hasPickupSchedule" class="text-muted-foreground text-xs mt-1">
+						Set pickup schedule first
+					</p>
+				</div>
 			</div>
 		</template>
 	</BaseRentalCard>

@@ -352,23 +352,23 @@ const isLender = computed(() => props.userRole === 'lender');
 							</Button>
 
 							<!-- Handover Actions -->
-							<Button
-								v-if="actions.canHandover"
-								variant="default"
-								class="w-full"
-								@click="showHandoverDialog = true"
-							>
-								Hand Over Item
-							</Button>
-
-							<Button
-								v-if="actions.canReceive"
-								variant="default"
-								class="w-full"
-								@click="showHandoverDialog = true"
-							>
-								Confirm Receipt
-							</Button>
+							<div v-if="actions.canHandover || actions.canReceive">
+								<Button
+									variant="default"
+									class="w-full"
+									:disabled="!actions.hasPickupSchedule"
+									@click="showHandoverDialog = true"
+								>
+									{{ actions.canHandover ? 'Hand Over Item' : 'Confirm Receipt' }}
+								</Button>
+								
+								<p v-if="!actions.hasPickupSchedule" class="text-muted-foreground text-sm mt-2 text-center">
+									{{ isLender 
+										? 'Please set up a pickup schedule first' 
+										: 'Waiting for lender to set up pickup schedule' 
+									}}
+								</p>
+							</div>
 
 							<!-- Cancel Action -->
 							<Button
