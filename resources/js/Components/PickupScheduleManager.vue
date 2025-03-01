@@ -1,11 +1,19 @@
 <script setup>
 import { ref, watch, computed } from 'vue';
 import { useForm } from '@inertiajs/vue3';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+// Fix import paths to use capital 'C' in Components
+import { Button } from "@/Components/ui/button";
+import { Input } from "@/Components/ui/input";
+import { Textarea } from "@/Components/ui/textarea";
 import { formatDateTime } from "@/lib/formatters";
-import { CalendarIcon, ClockIcon, Trash2Icon, PencilIcon } from "lucide-vue-next";
+import { Trash2Icon, PencilIcon, CalendarIcon } from "lucide-vue-next";
+import { Popover, PopoverContent, PopoverTrigger } from "@/Components/ui/popover";
+import { Calendar } from "@/Components/ui/calendar"; // Updated import path
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+
+// Remove unused imports
+// import { CalendarDate, DateFormatter, getLocalTimeZone } from "@internationalized/date";
 
 const props = defineProps({
     rentalId: {
@@ -67,6 +75,39 @@ const currentNotes = computed({
     }
 });
 
+// Convert date string to Date object for the calendar
+const stringToDate = (dateString) => {
+    return dateString ? new Date(dateString) : null;
+};
+
+// Convert Date object to date string format
+const dateToString = (date) => {
+    return date ? format(date, 'yyyy-MM-dd') : '';
+};
+
+// Calendar state
+const date = computed({
+    get: () => stringToDate(isEditing.value ? editForm.pickup_date : form.pickup_date),
+    set: (value) => {
+        if (isEditing.value) {
+            editForm.pickup_date = dateToString(value);
+        } else {
+            form.pickup_date = dateToString(value);
+        }
+    }
+});
+
+// Format date for display
+const formattedDate = computed(() => {
+    const selectedDate = date.value;
+    if (!selectedDate) return "Pick a date";
+    return format(selectedDate, 'MMMM d, yyyy');
+});
+
+// Minimum date (today)
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+
 const submitForm = () => {
     form.post(route('pickup-schedules.store', props.rentalId), {
         preserveScroll: true,
@@ -112,27 +153,41 @@ const deleteSchedule = (id) => {
             </h3>
             <form @submit.prevent="isEditing ? updateSchedule() : submitForm()" class="space-y-4">
                 <div class="grid sm:grid-cols-2 gap-4">
+                    <!-- Date Picker -->
                     <div class="space-y-2">
                         <label class="text-sm font-medium">Date</label>
-                        <div class="relative">
-                            <Input
-                                type="date"
-                                v-model="currentPickupDate"
-                                required
-                            />
-                            <CalendarIcon class="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground" />
-                        </div>
+                        <Popover>
+                            <PopoverTrigger as-child>
+                                <Button
+                                    variant="outline"
+                                    :class="cn(
+                                        'w-full justify-start text-left font-normal',
+                                        !date && 'text-muted-foreground'
+                                    )"
+                                >
+                                    <CalendarIcon class="w-4 h-4 mr-2" />
+                                    {{ formattedDate }}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent class="w-auto p-0">
+                                <Calendar
+                                    v-model="date"
+                                    :min-date="today"
+                                    initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
                     </div>
+
+                    <!-- Time Input -->
                     <div class="space-y-2">
                         <label class="text-sm font-medium">Time</label>
-                        <div class="relative">
-                            <Input
-                                type="time"
-                                v-model="currentPickupTime"
-                                required
-                            />
-                            <ClockIcon class="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground" />
-                        </div>
+                        <Input
+                            type="time"
+                            v-model="currentPickupTime"
+                            required
+                            class="w-full"
+                        />
                     </div>
                 </div>
                 

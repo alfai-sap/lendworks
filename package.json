@@ -20,7 +20,7 @@
     "dependencies": {
         "@formkit/auto-animate": "^0.8.2",
         "@inertiajs/vue3": "^1.2.0",
-        "@internationalized/date": "^3.6.0",
+        "@internationalized/date": "^3.7.0",
         "@vee-validate/zod": "^4.14.7",
         "@vueuse/core": "^11.3.0",
         "class-variance-authority": "^0.7.0",
