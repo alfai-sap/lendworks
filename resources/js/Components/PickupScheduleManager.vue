@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/Components/ui/popover
 import { Calendar } from "@/Components/ui/calendar"; // Updated import path
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import TimePicker from "@/Components/ui/TimePicker.vue";
 
 // Remove unused imports
 // import { CalendarDate, DateFormatter, getLocalTimeZone } from "@internationalized/date";
@@ -182,11 +183,9 @@ const deleteSchedule = (id) => {
                     <!-- Time Input -->
                     <div class="space-y-2">
                         <label class="text-sm font-medium">Time</label>
-                        <Input
-                            type="time"
+                        <TimePicker
                             v-model="currentPickupTime"
                             required
-                            class="w-full"
                         />
                     </div>
                 </div>
