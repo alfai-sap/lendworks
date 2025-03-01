@@ -108,6 +108,13 @@ const actions = computed(() => props.rental.available_actions);
 				</Button>
 
 				<!-- Handover Actions -->
+				<div v-if="rental.status === 'to_handover'">
+					<p class="text-muted-foreground text-sm text-center">
+						Waiting for lender to set up pickup schedules...
+					</p>
+				</div>
+
+				<!-- Receive Actions -->
 				<div v-if="actions.canReceive">
 					<Button
 						variant="default"

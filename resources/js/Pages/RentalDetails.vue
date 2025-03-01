@@ -351,6 +351,13 @@ const isLender = computed(() => props.userRole === 'lender');
 								Pay Now
 							</Button>
 
+							 <!-- Waiting Message for Renter -->
+							 <div v-if="!isLender && rental.status === 'to_handover'" class="text-center">
+								<p class="text-muted-foreground text-sm">
+									Waiting for lender to set up pickup schedules...
+								</p>
+							</div>
+
 							<!-- Handover Actions -->
 							<div v-if="actions.canHandover || actions.canReceive">
 								<Button

@@ -37,8 +37,10 @@ class HandoverController extends Controller
             'submitted_by' => Auth::id(),
         ]);
 
-        // Update rental status to pending_proof and keep it visible in To Receive tab
-        $rental->update(['status' => 'pending_proof']);
+        // Update rental status to pending_proof (ensure this status is set)
+        $rental->update([
+            'status' => 'pending_proof'
+        ]);
 
         // Record timeline event
         $rental->recordTimelineEvent('handover', Auth::id(), ['proof_path' => $path]);

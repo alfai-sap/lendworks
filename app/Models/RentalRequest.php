@@ -172,6 +172,8 @@ class RentalRequest extends Model
         $isRenter = $user && $user->id === $this->renter_id;
         $isLender = $user && $user->id === $this->listing->user_id;
 
+        $hasPickupSchedule = $this->pickupSchedules()->exists();
+
         $actions = [
             'canApprove' => !$isRenter && $this->canApprove(),
             'canReject' => !$isRenter && $this->canReject(),
@@ -179,22 +181,19 @@ class RentalRequest extends Model
             'canPayNow' => $isRenter && $this->canPayNow(),
             'canHandover' => false,
             'canReceive' => false,
-            'hasPickupSchedule' => $this->pickupSchedules()->exists(),
+            'hasPickupSchedule' => $hasPickupSchedule,
         ];
 
         if (!$user) return $actions;
 
-        // Lender can handover when status is to_handover AND there's a pickup schedule
-        $actions['canHandover'] = 
-            $this->status === 'to_handover' && 
-            $this->listing->user_id === $user->id &&
-            $actions['hasPickupSchedule'];
+        // Always show handover/receive buttons for the correct status and role
+        if ($this->status === 'to_handover' && $isLender) {
+            $actions['canHandover'] = true;
+        }
 
-        // Renter can receive when status is pending_proof AND there's a pickup schedule
-        $actions['canReceive'] = 
-            $this->status === 'pending_proof' && 
-            $this->renter_id === $user->id &&
-            $actions['hasPickupSchedule'];
+        if ($this->status === 'pending_proof' && $isRenter) {
+            $actions['canReceive'] = true;
+        }
 
         return $actions;
     }
