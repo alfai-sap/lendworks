@@ -14,6 +14,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\HandoverController;
 use App\Http\Controllers\PickupScheduleController;
 use App\Http\Controllers\LenderPickupScheduleController;
+use App\Http\Controllers\RentalReturnController;
 use App\Http\Middleware\AdminMiddleware;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -78,6 +79,14 @@ Route::middleware(['auth'])->group(function () {
         ->name('lender.pickup-schedules.destroy');
     Route::patch('/lender/pickup-schedules/{schedule}', [LenderPickupScheduleController::class, 'update'])
         ->name('lender.pickup-schedules.update');
+
+    // Return Process Routes
+    Route::prefix('rentals/{rental}/return')->name('rental.return.')->group(function () {
+        Route::post('initiate', [RentalReturnController::class, 'initiateReturn'])->name('initiate');
+        Route::post('schedule', [RentalReturnController::class, 'scheduleReturn'])->name('schedule');
+        Route::post('proof', [RentalReturnController::class, 'submitProof'])->name('proof');
+        Route::post('confirm', [RentalReturnController::class, 'confirmReturn'])->name('confirm');
+    });
 });
 
 // Admin routes with auth and admin middleware

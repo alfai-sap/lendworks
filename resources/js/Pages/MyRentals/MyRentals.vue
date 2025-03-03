@@ -56,6 +56,13 @@ const groupedRentals = computed(() => {
 	return result;
 });
 
+// Update rental stats to include return-related stats
+const rentalStats = computed(() => ({
+	...props.rentalStats,
+	pending_return: props.rentalStats.pending_return || 0,
+	return_scheduled: props.rentalStats.return_scheduled || 0,
+}));
+
 const handleValueChange = (value) => {
 	selectedTab.value = value;
 };

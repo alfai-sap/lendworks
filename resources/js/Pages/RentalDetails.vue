@@ -16,6 +16,7 @@ import { Link } from "@inertiajs/vue3";
 import PaymentDialog from "@/Components/PaymentDialog.vue";
 import HandoverDialog from "@/Components/HandoverDialog.vue";
 import PickupDateSelector from "@/Components/PickupDateSelector.vue";
+import RentalDurationTracker from '@/Components/RentalDurationTracker.vue';
 
 const props = defineProps({
 	rental: Object,
@@ -141,6 +142,29 @@ const canShowHandover = computed(() => {
     }
     return actions.value.canReceive;
 });
+
+// Add new refs for return dialogs
+const showReturnDialog = ref(false);
+const returnDialogType = ref('schedule');
+
+// Add return form
+const returnForm = useForm({});
+
+const handleInitiateReturn = () => {
+    returnForm.post(route('rental.return.initiate', props.rental.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            returnDialogType.value = 'schedule';
+            showReturnDialog.value = true;
+        },
+    });
+};
+
+const handleConfirmReturn = () => {
+    returnForm.post(route('rental.return.confirm', props.rental.id), {
+        preserveScroll: true,
+    });
+};
 </script>
 
 <template>
@@ -325,6 +349,13 @@ const canShowHandover = computed(() => {
 					:lenderSchedules="lenderSchedules"
 					/>
 				</Card>
+
+				<!-- Add Duration Tracker for both roles with active rentals -->
+				<RentalDurationTracker 
+					v-if="rental.status === 'active'"
+					:rental="rental"
+					class="w-full"
+				/>
 			</div>
 
 			<!-- Right Column -->
@@ -390,6 +421,34 @@ const canShowHandover = computed(() => {
 								</Button>
 							</template>
 
+							 <!-- Return Actions -->
+							 <Button
+								v-if="actions.canInitiateReturn"
+								variant="default"
+								class="w-full"
+								@click="handleInitiateReturn"
+							>
+								Initiate Return
+							</Button>
+						
+							<Button
+								v-if="actions.canScheduleReturn"
+								variant="default"
+								class="w-full"
+								@click="showReturnDialog = true"
+							>
+								Schedule Return
+							</Button>
+						
+							<Button
+								v-if="actions.canConfirmReturn"
+								variant="default"
+								class="w-full"
+								@click="handleConfirmReturn"
+							>
+								Confirm Return
+							</Button>
+
 							<!-- No Actions Message -->
 							<p
 								v-if="
@@ -397,7 +456,10 @@ const canShowHandover = computed(() => {
 									!actions.canCancel &&
 									!actions.canApprove &&
 									!actions.canHandover &&
-									!actions.canReceive
+									!actions.canReceive &&
+									!actions.canInitiateReturn &&
+									!actions.canScheduleReturn &&
+									!actions.canConfirmReturn
 								"
 								class="text-muted-foreground text-sm text-center"
 							>
@@ -538,5 +600,13 @@ const canShowHandover = computed(() => {
 		v-model:show="showHandoverDialog"
 		:rental="rental"
 		:type="actions.canHandover ? 'handover' : 'receive'"
+	/>
+
+	<!-- Return Dialog -->
+	<ReturnDialog
+		v-model:show="showReturnDialog"
+		:rental="rental"
+		:type="returnDialogType"
+		:lender-schedules="lenderSchedules"
 	/>
 </template>

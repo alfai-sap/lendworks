@@ -6,6 +6,7 @@ import BaseRentalCard from "@/Components/BaseRentalCard.vue";
 import ConfirmDialog from "@/Components/ConfirmDialog.vue";
 import PaymentDialog from "@/Components/PaymentDialog.vue";
 import HandoverDialog from "@/Components/HandoverDialog.vue";
+import RentalDurationTracker from '@/Components/RentalDurationTracker.vue';
 import { useForm } from "@inertiajs/vue3";
 
 const props = defineProps({
@@ -89,9 +90,11 @@ const actions = computed(() => props.rental.available_actions);
 	>
 		<!-- Details slot -->
 		<template #additional-details>
-			<p v-if="rental.status === 'active'" class="text-muted-foreground text-sm">
-				Due: {{ formatRentalDate(rental.end_date) }}
-			</p>
+			<!-- Replace existing due date text with duration tracker -->
+			<RentalDurationTracker 
+				v-if="rental.status === 'active'"
+				:rental="rental"
+			/>
 		</template>
 
 		<!-- Actions slot -->

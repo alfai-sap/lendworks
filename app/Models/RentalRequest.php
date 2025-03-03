@@ -36,7 +36,11 @@ class RentalRequest extends Model
     ];
 
     protected $appends = [
-        'available_actions'
+        'available_actions',
+        'rental_duration',
+        'remaining_days',
+        'overdue_days',
+        'is_overdue'
     ];
 
     // Define core rental status constants
@@ -48,6 +52,10 @@ class RentalRequest extends Model
     const STATUS_CANCELLED = 'cancelled';
     const STATUS_RENTER_PAID = 'renter_paid';
     const STATUS_PENDING_PROOF = 'pending_proof';
+    // Add return-related status constants
+    const STATUS_PENDING_RETURN = 'pending_return';
+    const STATUS_RETURN_SCHEDULED = 'return_scheduled';
+    const STATUS_RETURN_PROOF_PENDING = 'return_proof_pending';
 
     // Update the status display logic
     public function getStatusForDisplayAttribute(): string 
@@ -158,10 +166,9 @@ class RentalRequest extends Model
 
     public function getIsOverdueAttribute(): bool
     {
-        if (!$this->hasStarted || $this->hasEnded) {
-            return false;
-        }
-        return now()->greaterThan($this->end_date);
+        return $this->status === 'active' && 
+               !$this->return_at && 
+               now()->startOfDay()->gt($this->end_date->startOfDay());
     }
 
     public function getHasHandoverProofAttribute(): bool
@@ -187,6 +194,9 @@ class RentalRequest extends Model
             'canPayNow' => $isRenter && $this->canPayNow(),
             'canHandover' => false,
             'canReceive' => false,
+            'canInitiateReturn' => false,
+            'canConfirmReturn' => false,
+            'canScheduleReturn' => false,
         ];
 
         if (!$user) return $actions;
@@ -200,6 +210,20 @@ class RentalRequest extends Model
         $actions['canReceive'] = 
             $this->status === 'pending_proof' && 
             $this->renter_id === $user->id;
+
+        // Return Process Actions - Only renter can initiate return
+        $actions['canInitiateReturn'] = 
+            $this->status === 'active' && 
+            $isRenter;
+
+        $actions['canScheduleReturn'] = 
+            $this->status === 'pending_return' && 
+            $isRenter;
+
+        $actions['canConfirmReturn'] = 
+            $this->status === 'return_proof_pending' && 
+            ($isLender || $isRenter) &&
+            !$this->hasReturnProof;
 
         return $actions;
     }
@@ -234,6 +258,16 @@ class RentalRequest extends Model
     public function scopeWithinPeriod(Builder $query, $days)
     {
         return $query->where('created_at', '>=', Carbon::now()->subDays($days));
+    }
+
+    // Add scope for returns
+    public function scopePendingReturn($query)
+    {
+        return $query->whereIn('status', [
+            self::STATUS_PENDING_RETURN,
+            self::STATUS_RETURN_SCHEDULED,
+            self::STATUS_RETURN_PROOF_PENDING
+        ]);
     }
 
     // Helper methods
@@ -333,5 +367,63 @@ class RentalRequest extends Model
             ->where('renter_id', $renterId)
             ->whereIn('status', ['pending', 'approved', 'active'])
             ->first();
+    }
+
+    // Add getters for return proof status
+    public function getHasReturnProofAttribute(): bool
+    {
+        return $this->handoverProofs()->where('type', 'return')->exists();
+    }
+
+    // Update rental duration tracking methods
+    public function getRentalDurationAttribute(): int
+    {
+        // Calculate rental period duration using PHP's native DateTime diff
+        $startDate = $this->start_date->startOfDay();
+        $endDate = $this->end_date->startOfDay();
+        
+        // Add 1 to include both start and end dates in the count
+        return $startDate->diffInDays($endDate) + 1;
+    }
+
+    public function getRemainingDaysAttribute(): int
+    {
+        // If rental is complete, return 0
+        if ($this->return_at) {
+            return 0;
+        }
+
+        $today = now()->startOfDay();
+        $startDate = $this->start_date->startOfDay();
+        $endDate = $this->end_date->startOfDay();
+        
+        // If we haven't reached start date yet, return total duration
+        if ($today->lt($startDate)) {
+            return $this->rental_duration;
+        }
+        
+        // If we're past the end date, return 0
+        if ($today->gt($endDate)) {
+            return 0;
+        }
+
+        // Calculate days between today and end date
+        $remainingDays = $today->diffInDays($endDate);
+
+        // Return remaining days
+        return $remainingDays + 1; // Add 1 to include the current day
+    }
+
+    public function getOverdueDaysAttribute(): int
+    {
+        if (!$this->isOverdue || $this->return_at) {
+            return 0;
+        }
+
+        $today = now()->startOfDay();
+        $endDate = $this->end_date->startOfDay();
+        
+        // Return number of days past the end date
+        return $today->diffInDays($endDate);
     }
 }

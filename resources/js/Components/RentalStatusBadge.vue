@@ -70,6 +70,21 @@ const statusInfo = computed(() => {
 				label: "Cancelled",
 				variant: "muted",
 			};
+		case "pending_return":
+			return {
+				label: "Return Pending",
+				variant: "warning",
+			};
+		case "return_scheduled":
+			return {
+				label: "Return Scheduled",
+				variant: "info",
+			};
+		case "return_proof_pending":
+			return {
+				label: "Return Proof Pending",
+				variant: "warning",
+			};
 		default:
 			return {
 				label: props.status,
