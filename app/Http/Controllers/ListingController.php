@@ -12,10 +12,11 @@ use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use App\Traits\ChecksSuspendedUsers;
 use Illuminate\Support\Facades\DB;
+use App\Traits\LogsUserActivity;
 
 class ListingController extends Controller
 {
-    use ChecksSuspendedUsers;
+    use ChecksSuspendedUsers, LogsUserActivity;
 
     public function index(Request $request)
     {
@@ -100,6 +101,16 @@ class ListingController extends Controller
                         ]);
                     }
                 }
+
+                $this->logUserActivity(
+                    'Created new listing: ' . $listing->title,
+                    'info',
+                    [
+                        'listing_id' => $listing->id,
+                        'category' => $listing->category->name,
+                        'price' => $listing->price
+                    ]
+                );
             });
         } catch (Exception $e) {
             return redirect()->route('my-listings')->with('status', 'Listing creation failed.');
@@ -274,27 +285,43 @@ class ListingController extends Controller
             $fields['location_id'] = $location->id;
         }
 
-        $listing->update($fields);
+        try {
+            DB::transaction(function () use ($request, $listing, $fields) {
+                $listing->update($fields);
 
-        if ($request->hasFile('images')) {
-            // delete existing images from storage and database
-            foreach ($listing->images as $image) {
-                Storage::disk('public')->delete($image->image_path);
-            }
-            $listing->images()->delete();
+                if ($request->hasFile('images')) {
+                    foreach ($listing->images as $image) {
+                        Storage::disk('public')->delete($image->image_path);
+                    }
+                    $listing->images()->delete();
 
-            // Store new images
-            foreach ($request->images as $index => $image) {
-                $path = $image->store('images/listing', 'public');
-                
-                $listing->images()->create([
-                    'image_path' => $path,
-                    'order' => $index,
-                ]);
-            }
+                    foreach ($request->images as $index => $image) {
+                        $path = $image->store('images/listing', 'public');
+                        
+                        $listing->images()->create([
+                            'image_path' => $path,
+                            'order' => $index,
+                        ]);
+                    }
+                }
+
+                $this->logUserActivity(
+                    'Updated listing: ' . $listing->title,
+                    'info',
+                    [
+                        'listing_id' => $listing->id,
+                        'changes' => array_diff_assoc($fields, $listing->getOriginal())
+                    ]
+                );
+            });
+
+            return redirect()->route('listing.show', $listing)
+                ->with('updated', true);
+
+        } catch (\Exception $e) {
+            report($e);
+            return back()->with('error', 'Failed to update listing. Please try again.');
         }
-        return redirect()->route('listing.show', $listing)
-            ->with('updated', true);
     }
 
     public function destroy(Request $request, Listing $listing)

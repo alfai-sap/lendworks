@@ -15,9 +15,12 @@ use Carbon\Carbon;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
 use App\Models\LenderPickupSchedule;
+use App\Traits\LogsUserActivity;
 
 class RentalRequestController extends Controller
 {
+    use LogsUserActivity;
+
     public function show(RentalRequest $rental)
     {
         $rental->load([
@@ -171,6 +174,18 @@ class RentalRequestController extends Controller
 
                 $rentalRequest->save();
                 $rentalRequest->recordTimelineEvent('created', Auth::id());
+
+                $this->logUserActivity(
+                    'Created rental request for: ' . $listing->title,
+                    'info',
+                    [
+                        'rental_id' => $rentalRequest->id,
+                        'listing_id' => $listing->id,
+                        'total_price' => $validated['total_price'],
+                        'duration' => $dates['end']->diffInDays($dates['start'])
+                    ]
+                );
+
                 DB::commit();
 
                 // notify owner
@@ -198,14 +213,18 @@ class RentalRequestController extends Controller
 
     private function parseDates($startDate, $endDate)
     {
-        date_default_timezone_set('Asia/Manila');
-        
-        return [
-            'start' => Carbon::createFromFormat('Y-m-d', $startDate, 'Asia/Manila')
-                ->startOfDay(), // 00:00:00
-            'end' => Carbon::createFromFormat('Y-m-d', $endDate, 'Asia/Manila')
-                ->endOfDay(), // 23:59:59
-        ];
+        try {
+            date_default_timezone_set('Asia/Manila');
+            
+            return [
+                'start' => Carbon::createFromFormat('Y-m-d', $startDate, 'Asia/Manila')
+                    ->startOfDay(), // 00:00:00
+                'end' => Carbon::createFromFormat('Y-m-d', $endDate, 'Asia/Manila')
+                    ->endOfDay(), // 23:59:59
+            ];
+        } catch (\Exception $e) {
+            throw new \Exception('Invalid date format provided.');
+        }
     }
 
     public function approve(Request $request, RentalRequest $rentalRequest)
@@ -386,6 +405,16 @@ class RentalRequestController extends Controller
                     'role' => $cancellationReason->role,
                     'restored_quantity' => $rentalRequest->quantity_approved
                 ]);
+
+                $this->logUserActivity(
+                    'Cancelled rental request #' . $rentalRequest->id,
+                    'warning',
+                    [
+                        'rental_id' => $rentalRequest->id,
+                        'reason' => $cancellationReason->description,
+                        'cancelled_as' => $isRenter ? 'renter' : 'lender'
+                    ]
+                );
             });
 
             return back()->with('success', 'Rental request cancelled successfully.');

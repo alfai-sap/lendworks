@@ -20,9 +20,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use App\Traits\LogsAdminActivity;
 
 class AdminController extends Controller
 {
+    use LogsAdminActivity;
+
     /**
      * Change Log - AdminController.php
      * 
@@ -352,6 +355,14 @@ class AdminController extends Controller
     public function suspendUser(User $user)
     {
         $user->update(['status' => 'suspended']);
+        
+        $this->logActivity(
+            "User {$user->name} was suspended",
+            'warning',
+            'admin',
+            ['user_id' => $user->id]
+        );
+
         return back()->with('success', 'User suspended successfully');
     }
 
@@ -526,6 +537,13 @@ class AdminController extends Controller
             // Notify user
             $listing->user->notify(new ListingApproved($listing));
 
+            $this->logActivity(
+                "Listing '{$listing->title}' was approved",
+                'info',
+                'admin',
+                ['listing_id' => $listing->id]
+            );
+
             return back()->with('success', 'Listing approved successfully');
         } catch (\Exception $e) {
             report($e);
@@ -589,6 +607,16 @@ class AdminController extends Controller
             ]);
 
             DB::commit();
+
+            $this->logActivity(
+                "Listing '{$listing->title}' was rejected",
+                'warning',
+                'admin',
+                [
+                    'listing_id' => $listing->id,
+                    'reason_id' => $validated['rejection_reason']
+                ]
+            );
 
             // Notify user (outside transaction since it's not a database operation)
             $listing->user->notify(new ListingRejected($listing));

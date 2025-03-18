@@ -11,11 +11,14 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use App\Models\LenderPickupSchedule; // Add this import at the top
+use App\Traits\LogsUserActivity;
 
 class ReturnController extends Controller
 {
+    use LogsUserActivity;
+
     // Simplify initiateReturn to just update status and create timeline event
-    public function initiateReturn(RentalRequest $rental)
+    public function initiateReturn(Request $request, RentalRequest $rental)
     {
         if ($rental->renter_id !== Auth::id()) {
             abort(403);
@@ -25,20 +28,35 @@ class ReturnController extends Controller
             return back()->with('error', 'This rental is not active.');
         }
 
-        DB::transaction(function () use ($rental) {
-            $rental->update(['status' => 'pending_return']);
-            
-            // Enhanced metadata for initiation
-            $rental->recordTimelineEvent('return_initiated', Auth::id(), [
-                'rental_end_date' => $rental->end_date->format('Y-m-d'),
-                'is_early_return' => now()->lt($rental->end_date),
-                'initiated_by' => 'renter',
-                'days_from_end' => now()->diffInDays($rental->end_date, false),
-                'return_reason' => now()->lt($rental->end_date) ? 'early_return' : 'normal_return'
-            ]);
-        });
+        try {
+            DB::transaction(function () use ($rental) {
+                $rental->update(['status' => 'pending_return']);
+                
+                // Enhanced metadata for initiation
+                $rental->recordTimelineEvent('return_initiated', Auth::id(), [
+                    'rental_end_date' => $rental->end_date->format('Y-m-d'),
+                    'is_early_return' => now()->lt($rental->end_date),
+                    'initiated_by' => 'renter',
+                    'days_from_end' => now()->diffInDays($rental->end_date, false),
+                    'return_reason' => now()->lt($rental->end_date) ? 'early_return' : 'normal_return'
+                ]);
+            });
 
-        return back()->with('success', 'Return process initiated.');
+            $this->logUserActivity(
+                "Initiated return process for rental #{$rental->id}",
+                'info',
+                [
+                    'rental_id' => $rental->id,
+                    'listing_title' => $rental->listing->title,
+                    'rental_days' => $rental->handover_at->diffInDays(now()),
+                    'is_overdue' => $rental->is_overdue
+                ]
+            );
+
+            return back()->with('success', 'Return process initiated successfully.');
+        } catch (\Exception $e) {
+            // ...existing error handling...
+        }
     }
 
     public function storeSchedule(Request $request, RentalRequest $rental)
@@ -133,29 +151,45 @@ class ReturnController extends Controller
             'proof_image' => ['required', 'image', 'max:5120']
         ]);
 
-        DB::transaction(function () use ($rental, $request) {
-            $path = $request->file('proof_image')->store('return-proofs', 'public');
+        try {
+            DB::transaction(function () use ($rental, $request) {
+                $path = $request->file('proof_image')->store('return-proofs', 'public');
 
-            // Create return proof using the new model
-            ReturnProof::create([
-                'rental_request_id' => $rental->id,
-                'type' => 'return',
-                'proof_path' => $path,
-                'submitted_by' => Auth::id()
-            ]);
+                // Create return proof using the new model
+                ReturnProof::create([
+                    'rental_request_id' => $rental->id,
+                    'type' => 'return',
+                    'proof_path' => $path,
+                    'submitted_by' => Auth::id()
+                ]);
 
-            $rental->update(['status' => 'pending_return_confirmation']);
-            
-            $rental->recordTimelineEvent('return_submitted', Auth::id(), [
-                'proof_path' => $path,
-                'submitted_by' => 'renter',
-                'submission_datetime' => now()->format('Y-m-d H:i:s'),
-                'notes' => $request->input('notes'),
-                'location' => $request->input('location')
-            ]);
-        });
+                $rental->update(['status' => 'pending_return_confirmation']);
+                
+                $rental->recordTimelineEvent('return_submitted', Auth::id(), [
+                    'proof_path' => $path,
+                    'submitted_by' => 'renter',
+                    'submission_datetime' => now()->format('Y-m-d H:i:s'),
+                    'notes' => $request->input('notes'),
+                    'location' => $request->input('location')
+                ]);
+            });
 
-        return back()->with('success', 'Return proof submitted.');
+            $this->logUserActivity(
+                "Submitted return proof for rental #{$rental->id}",
+                'info',
+                [
+                    'rental_id' => $rental->id,
+                    'listing_id' => $rental->listing_id,
+                    'proof_path' => $path,
+                    'is_overdue' => $rental->is_overdue,
+                    'overdue_days' => $rental->days_overdue ?? 0
+                ]
+            );
+
+            return back()->with('success', 'Return proof submitted successfully.');
+        } catch (\Exception $e) {
+            // ...existing error handling...
+        }
     }
 
     public function confirmItemReceived(Request $request, RentalRequest $rental)
@@ -337,5 +371,32 @@ class ReturnController extends Controller
         });
 
         return back()->with('success', 'Return schedule selected successfully.');
+    }
+
+    public function confirmReturn(Request $request, RentalRequest $rental)
+    {
+        // ...existing validation code...
+
+        try {
+            // ...existing return confirmation code...
+
+            $this->logUserActivity(
+                "Confirmed item return for rental #{$rental->id}",
+                'info',
+                [
+                    'rental_id' => $rental->id,
+                    'listing_id' => $rental->listing_id,
+                    'listing_title' => $rental->listing->title,
+                    'total_days' => $rental->handover_at->diffInDays($rental->return_at),
+                    'is_overdue' => $rental->is_overdue,
+                    'overdue_days' => $rental->days_overdue ?? 0,
+                    'overdue_fee' => $rental->overdue_fee ?? 0
+                ]
+            );
+
+            return back()->with('success', 'Return confirmed successfully.');
+        } catch (\Exception $e) {
+            // ...existing error handling...
+        }
     }
 }

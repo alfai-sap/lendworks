@@ -3,18 +3,21 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\RentalDispute as Dispute; // Add this line to alias RentalDispute as Dispute
+use App\Models\RentalDispute; // Update this line to use the correct namespace
 use App\Notifications\DisputeStatusUpdated;
 use App\Notifications\DisputeResolved;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
+use App\Traits\LogsAdminActivity;
 
 class DisputeController extends Controller
 {
+    use LogsAdminActivity;
+
     public function index(Request $request)
     {
-        $query = Dispute::query()
+        $query = RentalDispute::query()  // Update RentalDispute reference
             ->with(['rental.listing', 'rental.renter'])
             ->latest();
 
@@ -47,10 +50,10 @@ class DisputeController extends Controller
         }
 
         $stats = [
-            'total' => Dispute::count(),
-            'pending' => Dispute::where('status', 'pending')->count(),
-            'reviewed' => Dispute::where('status', 'reviewed')->count(),
-            'resolved' => Dispute::where('status', 'resolved')->count(),
+            'total' => RentalDispute::count(),
+            'pending' => RentalDispute::where('status', 'pending')->count(),
+            'reviewed' => RentalDispute::where('status', 'reviewed')->count(),
+            'resolved' => RentalDispute::where('status', 'resolved')->count(),
         ];
 
         return Inertia::render('Admin/Disputes', [
@@ -60,7 +63,7 @@ class DisputeController extends Controller
         ]);
     }
 
-    public function show(RentalDispute $dispute)
+    public function show(RentalDispute $dispute)  // Update parameter type
     {
         $dispute->load([
             'rental.handoverProofs',
@@ -125,7 +128,7 @@ class DisputeController extends Controller
         ]);
     }
 
-    public function updateStatus(Request $request, RentalDispute $dispute)
+    public function updateStatus(Request $request, RentalDispute $dispute)  // Update parameter type
     {
         $validated = $request->validate([
             'status' => ['required', 'in:reviewed,resolved'],
@@ -135,6 +138,18 @@ class DisputeController extends Controller
             'status' => $validated['status']
         ]);
 
+        $this->logActivity(
+            "Updated dispute status for rental #{$dispute->rental_request_id}",
+            'info',
+            'admin',
+            [
+                'dispute_id' => $dispute->id,
+                'rental_id' => $dispute->rental_request_id,
+                'old_status' => $dispute->getOriginal('status'),
+                'new_status' => $validated['status']
+            ]
+        );
+
         // Notify users
         $dispute->rental->renter->notify(new DisputeStatusUpdated($dispute));
         $dispute->rental->listing->user->notify(new DisputeStatusUpdated($dispute));
@@ -142,7 +157,7 @@ class DisputeController extends Controller
         return back()->with('success', 'Dispute status updated successfully.');
     }
 
-    public function resolve(Request $request, RentalDispute $dispute)
+    public function resolve(Request $request, RentalDispute $dispute)  // Update parameter type
     {
         $validated = $request->validate([
             'verdict' => ['required', 'string'],
@@ -166,123 +181,147 @@ class DisputeController extends Controller
             'validation_data' => $validated
         ]);
 
-        DB::transaction(function () use ($dispute, $validated) {
-            // Base dispute resolution data
-            $resolutionData = [
-                'status' => 'resolved',
-                'verdict' => $validated['verdict'],
-                'verdict_notes' => $validated['verdict_notes'],
-                'resolution_type' => $validated['resolution_type'],
-                'resolved_at' => now(),
-                'resolved_by' => auth()->id()
-            ];
+        try {
+            DB::transaction(function () use ($dispute, $validated) {
+                // Base dispute resolution data
+                $resolutionData = [
+                    'status' => 'resolved',
+                    'verdict' => $validated['verdict'],
+                    'verdict_notes' => $validated['verdict_notes'],
+                    'resolution_type' => $validated['resolution_type'],
+                    'resolved_at' => now(),
+                    'resolved_by' => auth()->id()
+                ];
 
-            // Update dispute record with correct handling for rejection
-            if ($validated['resolution_type'] === 'rejected') {
-                $resolutionData['deposit_deduction'] = 0;  // Ensure no deduction
-                $resolutionData['deposit_deduction_reason'] = null;  // No reason needed
-                
-                // Update rental status
-                $dispute->rental->update([
-                    'status' => 'disputed'  // Keep as disputed to allow new dispute
-                ]);
-            } elseif ($validated['resolution_type'] === 'deposit_deducted') {
-                $resolutionData['deposit_deduction'] = $validated['deposit_deduction'];
-                $resolutionData['deposit_deduction_reason'] = $validated['deposit_deduction_reason'];
-            }
+                // Update dispute record with correct handling for rejection
+                if ($validated['resolution_type'] === 'rejected') {
+                    $resolutionData['deposit_deduction'] = 0;  // Ensure no deduction
+                    $resolutionData['deposit_deduction_reason'] = null;  // No reason needed
+                    
+                    // Update rental status
+                    $dispute->rental->update([
+                        'status' => 'disputed'  // Keep as disputed to allow new dispute
+                    ]);
+                } elseif ($validated['resolution_type'] === 'deposit_deducted') {
+                    $resolutionData['deposit_deduction'] = $validated['deposit_deduction'];
+                    $resolutionData['deposit_deduction_reason'] = $validated['deposit_deduction_reason'];
+                }
 
-            // Update dispute record
-            $dispute->update($resolutionData);
+                // Update dispute record
+                $dispute->update($resolutionData);
 
-            // Process deductions only for deposit_deducted type
-            if ($validated['resolution_type'] === 'deposit_deducted') {
-                // Create deposit deduction record with eager loading
-                $deduction = $dispute->rental->depositDeductions()->create([
-                    'amount' => $validated['deposit_deduction'],
-                    'reason' => $validated['deposit_deduction_reason'],
-                    'dispute_id' => $dispute->id,
-                    'admin_id' => auth()->id()
-                ]);
+                // Process deductions only for deposit_deducted type
+                if ($validated['resolution_type'] === 'deposit_deducted') {
+                    // Create deposit deduction record with eager loading
+                    $deduction = $dispute->rental->depositDeductions()->create([
+                        'amount' => $validated['deposit_deduction'],
+                        'reason' => $validated['deposit_deduction_reason'],
+                        'dispute_id' => $dispute->id,
+                        'admin_id' => auth()->id()
+                    ]);
 
-                // Force refresh rental model to recalculate remaining deposit
-                $dispute->rental->refresh();
+                    // Force refresh rental model to recalculate remaining deposit
+                    $dispute->rental->refresh();
 
-                \Log::info('Deposit Deduction Created', [
-                    'rental_id' => $dispute->rental->id,
-                    'deduction_amount' => $validated['deposit_deduction'],
-                    'remaining_deposit' => $dispute->rental->remaining_deposit
-                ]);
+                    \Log::info('Deposit Deduction Created', [
+                        'rental_id' => $dispute->rental->id,
+                        'deduction_amount' => $validated['deposit_deduction'],
+                        'remaining_deposit' => $dispute->rental->remaining_deposit
+                    ]);
 
-                // Create lender earnings adjustment
-                $adjustment = $dispute->rental->lenderEarningsAdjustments()->create([
-                    'type' => 'deposit_deduction',
-                    'amount' => $validated['deposit_deduction'],
-                    'description' => 'Deposit deduction from dispute resolution',
-                    'reference_id' => (string) $dispute->id
-                ]);
+                    // Create lender earnings adjustment
+                    $adjustment = $dispute->rental->lenderEarningsAdjustments()->create([
+                        'type' => 'deposit_deduction',
+                        'amount' => $validated['deposit_deduction'],
+                        'description' => 'Deposit deduction from dispute resolution',
+                        'reference_id' => (string) $dispute->id
+                    ]);
 
-                \Log::info('Created lender earnings adjustment', [
-                    'adjustment_id' => $adjustment->id,
-                    'amount' => $validated['deposit_deduction']
-                ]);
+                    \Log::info('Created lender earnings adjustment', [
+                        'adjustment_id' => $adjustment->id,
+                        'amount' => $validated['deposit_deduction']
+                    ]);
 
-                // Update completion payment if it exists
-                $completionPayment = $dispute->rental->completion_payments()
-                    ->where('type', 'lender_payment')
-                    ->first();
+                    // Update completion payment if it exists
+                    $completionPayment = $dispute->rental->completion_payments()
+                        ->where('type', 'lender_payment')
+                        ->first();
 
-                if ($completionPayment) {
-                    $newAmount = $completionPayment->amount + $validated['deposit_deduction'];
-                    $completionPayment->update(['amount' => $newAmount]);
+                    if ($completionPayment) {
+                        $newAmount = $completionPayment->amount + $validated['deposit_deduction'];
+                        $completionPayment->update(['amount' => $newAmount]);
 
-                    \Log::info('Updated completion payment', [
-                        'payment_id' => $completionPayment->id,
-                        'old_amount' => $completionPayment->amount,
-                        'new_amount' => $newAmount
+                        \Log::info('Updated completion payment', [
+                            'payment_id' => $completionPayment->id,
+                            'old_amount' => $completionPayment->amount,
+                            'new_amount' => $newAmount
+                        ]);
+                    }
+
+                    // Update rental record to reflect new total
+                    $dispute->rental->update([
+                        'total_lender_earnings' => DB::raw("total_lender_earnings + {$validated['deposit_deduction']}")
+                    ]);
+
+                    \Log::info('Updated rental total lender earnings', [
+                        'rental_id' => $dispute->rental->id,
+                        'deduction_amount' => $validated['deposit_deduction']
                     ]);
                 }
 
-                // Update rental record to reflect new total
-                $dispute->rental->update([
-                    'total_lender_earnings' => DB::raw("total_lender_earnings + {$validated['deposit_deduction']}")
-                ]);
+                // Always update rental status for both rejection and deduction
+                $dispute->rental->update(['status' => 'pending_final_confirmation']);
 
-                \Log::info('Updated rental total lender earnings', [
-                    'rental_id' => $dispute->rental->id,
-                    'deduction_amount' => $validated['deposit_deduction']
-                ]);
-            }
+                // Record timeline event with appropriate data
+                $timelineData = [
+                    'verdict' => $validated['verdict'],
+                    'verdict_notes' => $validated['verdict_notes'],
+                    'resolution_type' => $validated['resolution_type'],
+                    'resolved_by' => auth()->user()->name,
+                    'resolved_at' => now()->format('Y-m-d H:i:s'),
+                    'is_rejected' => $validated['resolution_type'] === 'rejected'
+                ];
 
-            // Always update rental status for both rejection and deduction
-            $dispute->rental->update(['status' => 'pending_final_confirmation']);
+                // Add deduction data only if it's a deduction case
+                if ($validated['resolution_type'] === 'deposit_deducted') {
+                    $timelineData['deposit_deduction'] = $validated['deposit_deduction'];
+                    $timelineData['deposit_deduction_reason'] = $validated['deposit_deduction_reason'];
+                }
 
-            // Record timeline event with appropriate data
-            $timelineData = [
-                'verdict' => $validated['verdict'],
-                'verdict_notes' => $validated['verdict_notes'],
-                'resolution_type' => $validated['resolution_type'],
-                'resolved_by' => auth()->user()->name,
-                'resolved_at' => now()->format('Y-m-d H:i:s'),
-                'is_rejected' => $validated['resolution_type'] === 'rejected'
-            ];
+                $dispute->rental->recordTimelineEvent('dispute_resolved', auth()->id(), $timelineData);
 
-            // Add deduction data only if it's a deduction case
-            if ($validated['resolution_type'] === 'deposit_deducted') {
-                $timelineData['deposit_deduction'] = $validated['deposit_deduction'];
-                $timelineData['deposit_deduction_reason'] = $validated['deposit_deduction_reason'];
-            }
+                // Send notifications
+                $dispute->rental->renter->notify(new DisputeResolved($dispute, false));
+                $dispute->rental->listing->user->notify(new DisputeResolved($dispute, true));
 
-            $dispute->rental->recordTimelineEvent('dispute_resolved', auth()->id(), $timelineData);
+                $this->logActivity(
+                    "Resolved dispute for rental #{$dispute->rental_request_id}",
+                    'info',
+                    'admin',
+                    [
+                        'dispute_id' => $dispute->id,
+                        'rental_id' => $dispute->rental_request_id,
+                        'resolution_type' => $validated['resolution_type'],
+                        'verdict' => $validated['verdict'],
+                        'deposit_deduction' => $validated['deposit_deduction'] ?? 0,
+                        'deposit_deduction_reason' => $validated['deposit_deduction_reason'] ?? null,
+                        'resolved_by' => auth()->user()->name
+                    ]
+                );
+            });
 
-            // Send notifications
-            $dispute->rental->renter->notify(new DisputeResolved($dispute, false));
-            $dispute->rental->listing->user->notify(new DisputeResolved($dispute, true));
-        });
+            $message = $validated['resolution_type'] === 'rejected' 
+                ? 'Dispute rejected successfully.'
+                : 'Dispute resolved with deduction successfully.';
 
-        $message = $validated['resolution_type'] === 'rejected' 
-            ? 'Dispute rejected successfully.'
-            : 'Dispute resolved with deduction successfully.';
+            return back()->with('success', $message);
+        } catch (\Exception $e) {
+            \Log::error('Error resolving dispute', [
+                'dispute_id' => $dispute->id,
+                'error' => $e->getMessage()
+            ]);
 
-        return back()->with('success', $message);
+            return back()->withErrors('An error occurred while resolving the dispute.');
+        }
     }
 }

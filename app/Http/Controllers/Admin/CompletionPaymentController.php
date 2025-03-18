@@ -10,9 +10,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use App\Traits\LogsAdminActivity;
 
 class CompletionPaymentController extends Controller
 {
+    use LogsAdminActivity;
+
     public function storeLenderPayment(Request $request, RentalRequest $rental)
     {
         Log::info('Received lender payment request', [
@@ -72,6 +75,19 @@ class CompletionPaymentController extends Controller
 
             // Check completion status and restore units if needed
             $this->checkAndRestoreUnits($rental);
+
+            $this->logActivity(
+                "Released lender payment for rental #{$rental->id}",
+                'info',
+                'admin',
+                [
+                    'rental_id' => $rental->id,
+                    'listing_id' => $rental->listing_id,
+                    'lender_id' => $rental->listing->user_id,
+                    'amount' => $rental->total_lender_earnings,
+                    'service_fee' => $rental->service_fee
+                ]
+            );
 
             DB::commit();
             return back()->with('success', 'Lender payment processed successfully.');
@@ -136,6 +152,19 @@ class CompletionPaymentController extends Controller
 
                 // Check completion status and restore units if needed
                 $this->checkAndRestoreUnits($rental);
+
+                $this->logActivity(
+                    "Processed deposit refund for rental #{$rental->id}",
+                    'info',
+                    'admin',
+                    [
+                        'rental_id' => $rental->id,
+                        'renter_id' => $rental->renter_id,
+                        'deposit_amount' => $rental->deposit_fee,
+                        'deductions' => $rental->depositDeductions->sum('amount'),
+                        'refund_amount' => $rental->remaining_deposit
+                    ]
+                );
             });
 
             return back()->with('success', 'Security deposit refund processed successfully.');

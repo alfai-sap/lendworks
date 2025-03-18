@@ -11,21 +11,20 @@ class RentalDispute extends Model
         'rental_request_id',
         'reason',
         'description',
-        'proof_path',
         'status',
+        'proof_path',
+        'raised_by',
+        'resolved_by',
         'resolution_type',
         'verdict',
         'verdict_notes',
         'deposit_deduction',
         'deposit_deduction_reason',
-        'resolved_at',
-        'resolved_by',
-        'raised_by'  // Add this line
+        'resolved_at'
     ];
 
     protected $casts = [
-        'resolved_at' => 'datetime',
-        'deposit_deduction' => 'integer',
+        'resolved_at' => 'datetime'
     ];
 
     public function rental(): BelongsTo

@@ -17,16 +17,36 @@ import { ref, watch } from "vue";
 import debounce from "lodash/debounce";
 import { formatDateTime } from "@/lib/formatters";
 import { usePage } from "@inertiajs/vue3";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 
 defineOptions({ layout: AdminLayout });
 
 const props = defineProps({
-    logs: Object,
-    stats: Object,
+    logs: {
+        type: Object,
+        required: true
+    },
+    stats: {
+        type: Object,
+        required: true,
+        default: () => ({
+            system: 0,
+            user: 0,
+            admin: 0,
+            error: 0
+        })
+    },
     filters: {
         type: Object,
         default: () => ({
-            type: 'system',
+            type: 'all',
             period: '7',
             level: 'all',
             search: ''
@@ -110,6 +130,15 @@ const exportLogs = async () => {
         console.error('Export failed:', error);
     }
 };
+
+const getLogTypeLabel = (type) => {
+    const types = {
+        system: 'System Log',
+        user: 'User Activity',
+        admin: 'Admin Action'
+    };
+    return types[type] || type;
+};
 </script>
 
 <template>
@@ -125,7 +154,7 @@ const exportLogs = async () => {
             </Button>
         </div>
 
-        <!-- Stats -->
+        <!-- Stats Cards -->
         <div class="grid gap-4 md:grid-cols-4">
             <Card>
                 <CardHeader>
@@ -135,7 +164,30 @@ const exportLogs = async () => {
                     <div class="text-2xl font-bold">{{ stats.system }}</div>
                 </CardContent>
             </Card>
-            <!-- Add similar cards for user, admin, and error logs -->
+            <Card>
+                <CardHeader>
+                    <CardTitle class="text-sm font-medium">User Activity</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div class="text-2xl font-bold">{{ stats.user }}</div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle class="text-sm font-medium">Admin Actions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div class="text-2xl font-bold">{{ stats.admin }}</div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle class="text-sm font-medium">Errors</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div class="text-2xl font-bold">{{ stats.error }}</div>
+                </CardContent>
+            </Card>
         </div>
 
         <!-- Filters -->
@@ -197,28 +249,75 @@ const exportLogs = async () => {
         <!-- Logs Table -->
         <Card>
             <CardContent class="p-0">
-                <div class="space-y-4">
-                    <div v-for="log in logs.data" :key="log.id" class="p-4 border-b last:border-0">
-                        <div class="flex items-start justify-between gap-4">
-                            <div class="space-y-1">
-                                <div class="flex items-center gap-2">
-                                    <Badge :variant="getLevelBadge(log.level)">
-                                        {{ log.level }}
-                                    </Badge>
-                                    <span class="font-medium">{{ log.log_type }}</span>
-                                </div>
-                                <p class="text-sm">{{ log.description }}</p>
-                                <pre v-if="log.properties" class="text-xs bg-muted p-2 rounded-md mt-2 overflow-x-auto">
-                                    {{ JSON.stringify(log.properties, null, 2) }}
-                                </pre>
-                            </div>
-                            <div class="text-sm text-muted-foreground whitespace-nowrap">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Timestamp</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Level</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead>Details</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        <TableRow v-for="log in logs.data" :key="log.id" class="group hover:bg-muted/50">
+                            <TableCell class="whitespace-nowrap font-medium">
                                 {{ formatDateTime(log.created_at) }}
-                            </div>
-                        </div>
-                    </div>
+                            </TableCell>
+                            <TableCell class="whitespace-nowrap">
+                                {{ getLogTypeLabel(log.type) }}
+                            </TableCell>
+                            <TableCell>
+                                <Badge :variant="getLevelBadge(log.level)">
+                                    {{ log.level }}
+                                </Badge>
+                            </TableCell>
+                            <TableCell class="max-w-md">
+                                <span class="line-clamp-2">{{ log.description }}</span>
+                            </TableCell>
+                            <TableCell>
+                                <Button 
+                                    v-if="log.properties"
+                                    variant="ghost" 
+                                    size="sm"
+                                    class="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
+                                    @click="() => {
+                                        // You can add a modal here to show full details
+                                        console.log(log.properties);
+                                    }"
+                                >
+                                    View Details
+                                </Button>
+                            </TableCell>
+                        </TableRow>
+                    </TableBody>
+                </Table>
+
+                <!-- Empty state -->
+                <div v-if="!logs.data.length" class="p-4 text-center text-muted-foreground">
+                    No logs found matching your filters.
+                </div>
+
+                <!-- Pagination -->
+                <div v-if="logs.data.length" class="p-4 border-t">
+                    <PaginationLinks :paginator="logs" />
                 </div>
             </CardContent>
         </Card>
     </div>
 </template>
+
+<style scoped>
+/* Add these styles for better table alignment */
+:deep(.table) {
+    @apply w-full;
+}
+
+:deep(.table th) {
+    @apply font-medium text-muted-foreground;
+}
+
+:deep(.table td) {
+    @apply align-top py-4;
+}
+</style>
