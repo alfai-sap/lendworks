@@ -32,4 +32,9 @@ class PickupSchedule extends Model
     {
         return $this->belongsTo(LenderPickupSchedule::class);
     }
+
+    public function rental()
+    {
+        return $this->belongsTo(RentalRequest::class, 'rental_request_id');
+    }
 }

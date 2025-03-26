@@ -820,7 +820,7 @@ private function normalizeGender($value)
         }
 
         $matchScore = $response['confidence'];
-        $threshold = 75; // Your confidence threshold
+        $threshold = 60; // Your confidence threshold
 
         // Add detailed logging of the match score
         Log::info('Face comparison score', [

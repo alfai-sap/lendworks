@@ -3,9 +3,14 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Carbon\Carbon;
 
 class AppServiceProvider extends ServiceProvider
 {
+    // Toggle this to enable/disable the time shift
+    protected static $timeShiftEnabled = false; // Enable (true) , Disable (False)
+    protected static $daysToAdd = 100; // Advance number of days
+
     /**
      * Register any application services.
      */
@@ -19,6 +24,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if (self::$timeShiftEnabled) {
+            Carbon::setTestNow(Carbon::now()->addDays(self::$daysToAdd));
+        }
         //
     }
 }

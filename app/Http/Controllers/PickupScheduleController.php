@@ -180,6 +180,7 @@ class PickupScheduleController extends Controller
         }
 
         $schedule = $rental->pickup_schedules()
+            ->with(['rental_request.renter'])  // Add this line to eager load relationships
             ->where('is_selected', true)
             ->firstOrFail();
 
@@ -191,8 +192,8 @@ class PickupScheduleController extends Controller
                 // Update rental status to proceed with handover
                 $rental->update(['status' => 'to_handover']);
 
-                // Add notification here
-                $schedule->rental->renter->notify(new ScheduleActionNotification(
+                // Now we can safely access the renter through the loaded relationship
+                $rental->renter->notify(new ScheduleActionNotification(
                     $rental,
                     'pickup_confirmed',
                     [
@@ -202,7 +203,7 @@ class PickupScheduleController extends Controller
                     ]
                 ));
 
-                // Update the timeline event type based on whether it was a suggestion
+                // Rest of the code remains the same...
                 $eventType = $schedule->is_suggested 
                     ? 'pickup_schedule_suggestion_accepted' 
                     : 'pickup_schedule_confirmed';

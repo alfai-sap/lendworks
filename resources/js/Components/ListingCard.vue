@@ -80,14 +80,14 @@ const handleDelete = () => {
 					Edit
 				</Button>
 
-				<Button
+				<!-- <Button
 					v-if="listing.status === 'approved'"
 					variant="outline"
 					size="sm"
 					@click="$emit('toggleAvailability', listing)"
 				>
 					{{ listing.is_available ? "Mark Unavailable" : "Mark Available" }}
-				</Button>
+				</Button> -->
 
 				<Button variant="destructive" size="sm" @click="showDeleteDialog = true">
 					Delete

@@ -34,6 +34,9 @@ class HandoverController extends Controller
         ]);
 
         try {
+            // Eager load necessary relationships
+            $rental->load(['renter', 'listing.user']);
+
             DB::transaction(function () use ($request, $rental) {
                 // Store the image
                 $path = $request->file('proof_image')->store('handover-proofs', 'public');
@@ -52,15 +55,15 @@ class HandoverController extends Controller
                 // Record timeline event
                 $rental->recordTimelineEvent('handover', Auth::id(), ['proof_path' => $path]);
 
-                // Add notification here
-                $rental->lender->notify(new HandoverActionNotification($rental, 'handover_submitted'));
+                // Add notifications using the loaded relationships
+                $rental->listing->user->notify(new HandoverActionNotification($rental, 'handover_submitted'));
                 $rental->renter->notify(new HandoverActionNotification($rental, 'handover_submitted'));
             });
 
             return back()->with('success', 'Handover proof submitted successfully.');
         } catch (\Exception $e) {
             report($e);
-            return back()->with('error', 'Failed to submit handover proof.');
+            return back()->with('error', 'Failed to submit handover proof: ' . $e->getMessage());
         }
     }
 
@@ -80,28 +83,39 @@ class HandoverController extends Controller
             'proof_image' => ['required', 'image', 'max:5120'], // 5MB max
         ]);
 
-        // Store the image
-        $path = $request->file('proof_image')->store('handover-proofs', 'public');
+        try {
+            // Eager load necessary relationships
+            $rental->load(['listing.user']);
 
-        // Create receive proof
-        HandoverProof::create([
-            'rental_request_id' => $rental->id,
-            'type' => 'receive',
-            'proof_path' => $path,
-            'submitted_by' => Auth::id(),
-        ]);
+            DB::transaction(function () use ($request, $rental) {
+                // Store the image
+                $path = $request->file('proof_image')->store('handover-proofs', 'public');
 
-        // Update rental status to active and set handover_at timestamp
-        $rental->update([
-            'status' => 'active',
-            'handover_at' => now(),
-        ]);
+                // Create receive proof
+                HandoverProof::create([
+                    'rental_request_id' => $rental->id,
+                    'type' => 'receive',
+                    'proof_path' => $path,
+                    'submitted_by' => Auth::id(),
+                ]);
 
-        // Record timeline event
-        $rental->recordTimelineEvent('receive', Auth::id(), ['proof_path' => $path]);
+                // Update rental status to active and set handover_at timestamp
+                $rental->update([
+                    'status' => 'active',
+                    'handover_at' => now(),
+                ]);
 
-        $rental->listing->user->notify(new HandoverActionNotification($rental, 'receive_confirmed'));
+                // Record timeline event
+                $rental->recordTimelineEvent('receive', Auth::id(), ['proof_path' => $path]);
 
-        return back()->with('success', 'Receive proof submitted successfully.');
+                // Send notification using loaded relationship
+                $rental->listing->user->notify(new HandoverActionNotification($rental, 'receive_confirmed'));
+            });
+
+            return back()->with('success', 'Receive proof submitted successfully.');
+        } catch (\Exception $e) {
+            report($e);
+            return back()->with('error', 'Failed to submit receive proof: ' . $e->getMessage());
+        }
     }
 }
