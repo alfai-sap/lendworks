@@ -96,58 +96,69 @@ class CompletionPaymentController extends Controller
         ]);
 
         try {
-            DB::transaction(function () use ($rental, $request, $validated) {
-                // Calculate refund amount (total deposit minus any deductions)
-                $depositDeduction = $rental->dispute && $rental->dispute->resolution_type === 'deposit_deducted' 
-                    ? $rental->dispute->deposit_deduction 
-                    : 0;
-                
-                $expectedRefund = $rental->deposit_fee - $depositDeduction;
-                
-                if ($validated['amount'] != $expectedRefund) {
-                    throw new \Exception('Invalid refund amount');
-                }
+            DB::beginTransaction();
 
-                // Store proof image
-                $imagePath = $request->file('proof_image')->store('payment-proofs', 'public');
+            // Calculate refund amount (total deposit minus any deductions)
+            $depositDeduction = $rental->dispute && $rental->dispute->resolution_type === 'deposit_deducted' 
+                ? $rental->dispute->deposit_deduction 
+                : 0;
+            
+            $expectedRefund = $rental->deposit_fee - $depositDeduction;
+            
+            if ($validated['amount'] != $expectedRefund) {
+                throw new \Exception('Invalid refund amount');
+            }
 
-                // Create payment record
-                CompletionPayment::create([
-                    'rental_request_id' => $rental->id,
-                    'type' => 'deposit_refund',
-                    'amount' => $validated['amount'],
-                    'reference_number' => $validated['reference_number'],
-                    'proof_path' => $imagePath,
-                    'notes' => $validated['notes'],
-                    'admin_id' => Auth::id(),
-                    'processed_at' => now(),
-                ]);
+            // Store proof image
+            $imagePath = $request->file('proof_image')->store('payment-proofs', 'public');
 
-                // Add notification here
+            // Create payment record
+            CompletionPayment::create([
+                'rental_request_id' => $rental->id,
+                'type' => 'deposit_refund',
+                'amount' => $validated['amount'],
+                'reference_number' => $validated['reference_number'],
+                'proof_path' => $imagePath,
+                'notes' => $validated['notes'],
+                'admin_id' => Auth::id(),
+                'processed_at' => now(),
+            ]);
+
+            // Add timeline event
+            $rental->recordTimelineEvent('deposit_refund_processed', Auth::id(), [
+                'amount' => $validated['amount'],
+                'reference_number' => $validated['reference_number'],
+                'proof_path' => $imagePath,
+                'processed_by' => Auth::id(),
+                'processed_at' => now()->toDateTimeString()
+            ]);
+
+            // Check and update completion status
+            $rental->checkCompletionPaymentStatus();
+
+            // Check completion status and restore units if needed
+            $this->checkAndRestoreUnits($rental);
+
+            DB::commit();
+
+            // Move notification outside the transaction
+            try {
                 $rental->renter->notify(new PaymentProcessedNotification(
                     $rental,
                     'deposit_refund',
                     $rental->deposit_fee
                 ));
-
-                // Add timeline event
-                $rental->recordTimelineEvent('deposit_refund_processed', Auth::id(), [
-                    'amount' => $validated['amount'],
-                    'reference_number' => $validated['reference_number'],
-                    'proof_path' => $imagePath,
-                    'processed_by' => Auth::id(),
-                    'processed_at' => now()->toDateTimeString()
+            } catch (\Exception $e) {
+                // Log the notification error but don't rollback the transaction
+                Log::warning('Failed to send deposit refund notification', [
+                    'rental_id' => $rental->id,
+                    'error' => $e->getMessage()
                 ]);
-
-                // Check and update completion status
-                $rental->checkCompletionPaymentStatus();
-
-                // Check completion status and restore units if needed
-                $this->checkAndRestoreUnits($rental);
-            });
+            }
 
             return back()->with('success', 'Security deposit refund processed successfully.');
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error('Failed to process deposit refund', [
                 'rental_id' => $rental->id,
                 'error' => $e->getMessage()
