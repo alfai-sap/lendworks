@@ -91,6 +91,32 @@ const cancelForm = useForm({
 	custom_feedback: "",
 });
 
+const initiateForm = useForm({});
+const showEarlyReturnDialog = ref(false);
+
+const handleInitiateReturn = () => {
+	const today = new Date();
+	const endDate = new Date(props.rental.end_date);
+
+	today.setHours(0, 0, 0, 0);
+	endDate.setHours(0, 0, 0, 0);
+
+	if (today < endDate) {
+		showEarlyReturnDialog.value = true;
+	} else {
+		proceedWithReturn();
+	}
+};
+
+const proceedWithReturn = () => {
+	initiateForm.post(route("rentals.initiate-return", props.rental.id), {
+		preserveScroll: true,
+		onSuccess: () => {
+			showEarlyReturnDialog.value = false;
+		},
+	});
+};
+
 const isOtherReason = computed(() => {
 	const rejectionReason = rejectionReasons.value.find(
 		(r) => r.value === rejectForm.rejection_reason_id
@@ -151,14 +177,6 @@ const showPaymentDialog = ref(false);
 
 // list of actions available for the rental as defined in the model
 const actions = computed(() => props.rental.available_actions);
-
-// // Fix the canShowHandover computed property
-// const canShowHandover = computed(() => {
-// 	if (actions.value.canHandover) {
-// 		return props.rental.pickup_schedules?.some((schedule) => schedule.is_selected);
-// 	}
-// 	return actions.value.canReceive;
-// });
 
 const lenderPayment = computed(() =>
 	props.rental.completion_payments?.find((p) => p.type === "lender_payment")
@@ -780,6 +798,17 @@ const selectedPickupSchedule = computed(() =>
 								Pay Now
 							</Button>
 
+							<!-- Add this before other action buttons -->
+							<Button
+								v-if="actions.canInitiateReturn"
+								variant="default"
+								class="w-full"
+								@click="handleInitiateReturn"
+								:disabled="initiateForm.processing"
+							>
+								Initiate Return Process
+							</Button>
+
 							<!-- Handover Actions -->
 							<template
 								v-if="(actions.canHandover || hasUnconfirmedSchedule || hasNoSchedule) && 
@@ -945,7 +974,8 @@ const selectedPickupSchedule = computed(() =>
 									!actions.canFinalizeReturn &&
 									!actions.canChoosePickupSchedule &&
 									!actions.canRaiseDispute &&
-									!showReturnScheduleButton
+									!showReturnScheduleButton &&
+									!actions.canInitiateReturn
 								"
 								class="text-muted-foreground text-sm text-center"
 							>
@@ -1382,4 +1412,89 @@ const selectedPickupSchedule = computed(() =>
 		:userRole="userRole"
 		:lenderSchedules="lenderSchedules"
 	/>
+
+	<!-- Early Return Dialog -->
+	<ConfirmDialog
+		v-model:show="showEarlyReturnDialog"
+		title="Early Return Request"
+		description="Please review these important details"
+		confirmLabel="Yes, Start Return Process"
+		cancelLabel="No, Keep Renting"
+		:processing="initiateForm.processing"
+		@confirm="proceedWithReturn"
+		@cancel="showEarlyReturnDialog = false"
+	>
+		<div class="space-y-6 mb-4">
+			<!-- Current Rental Status -->
+			<div class="bg-amber-50 p-4 rounded-lg space-y-2">
+				<p class="text-amber-600 text-sm font-medium">
+					Original End Date: {{ formatDateTime(rental.end_date, "MMMM D, YYYY") }}
+				</p>
+				<p class="text-amber-700 text-sm font-semibold">
+					{{ rental.remaining_days }} days remaining in your rental period
+				</p>
+				<p class="text-amber-600 text-sm">
+					Non-refundable amount: {{ formatNumber((rental.remaining_days/rentalDays) * rentalOnlyTotal) }}
+				</p>
+			</div>
+
+			<!-- Important Notices -->
+			<div class="border border-destructive/20 bg-destructive/5 p-4 rounded-lg">
+				<h4 class="font-medium text-sm text-destructive mb-2">⚠️ Important Notice:</h4>
+				<ul class="space-y-2 text-sm text-destructive/90">
+					<li class="flex items-start gap-2">
+						<span>•</span>
+						<span>This action <strong>cannot be undone</strong> once initiated</span>
+					</li>
+					<li class="flex items-start gap-2">
+						<span>•</span>
+						<span>No refunds will be provided for unused rental days</span>
+					</li>
+					<li class="flex items-start gap-2">
+						<span>•</span>
+						<span>Click "No, Keep Renting" if this was clicked by mistake</span>
+					</li>
+				</ul>
+			</div>
+
+			<!-- Process Steps -->
+			<div class="space-y-4">
+				<div class="flex items-start gap-3">
+					<div class="mt-1 p-1.5 bg-primary/10 text-primary rounded-lg">
+						<Package class="w-4 h-4" />
+					</div>
+					<div>
+						<p class="font-medium text-sm">Next Steps</p>
+						<p class="text-muted-foreground text-sm">
+							1. Select a return schedule<br>
+							2. Wait for lender confirmation<br>
+							3. Return item during scheduled time
+						</p>
+					</div>
+				</div>
+
+				<div class="flex items-start gap-3">
+					<div class="mt-1 p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield-check"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>
+					</div>
+					<div>
+						<p class="font-medium text-sm">Security Deposit</p>
+						<p class="text-muted-foreground text-sm">
+							Your security deposit of {{ formatNumber(rental.deposit_fee) }} will be returned after verification
+						</p>
+					</div>
+				</div>
+			</div>
+
+			<!-- Final Confirmation -->
+			<div class="bg-muted/30 p-4 rounded-lg">
+				<p class="text-sm font-medium text-center">
+					Are you sure you want to proceed with the early return?
+				</p>
+				<p class="text-xs text-muted-foreground text-center mt-1">
+					Click "No, Keep Renting" to continue with your rental as planned
+				</p>
+			</div>
+		</div>
+	</ConfirmDialog>
 </template>

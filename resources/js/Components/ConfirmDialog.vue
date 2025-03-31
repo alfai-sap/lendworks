@@ -194,13 +194,16 @@ const handleQuantityInput = (event) => {
 			<!-- Fixed Header -->
 			<DialogHeader class="sm:p-6 p-4">
 				<DialogTitle class="sm:text-xl text-lg">{{ title }}</DialogTitle>
-				<DialogDescription class="sm:mt-3 mt-2">
+				<DialogDescription v-if="description" class="sm:mt-3 mt-2">
 					{{ description }}
 				</DialogDescription>
 			</DialogHeader>
 
 			<!-- Scrollable Content Area -->
-			<div class="sm:px-6 flex-1 px-4">
+			<div class="sm:px-6 flex-1 px-4 overflow-y-auto">
+				<!-- Add default slot here for custom content -->
+				<slot></slot>
+
 				<!-- Enhanced quantity input -->
 				<div v-if="showQuantity" class="space-y-3 mb-4">
 					<div class="flex items-center justify-between">
