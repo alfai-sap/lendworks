@@ -92,6 +92,7 @@ const cancelForm = useForm({
 });
 
 const initiateForm = useForm({});
+const confirmForm = useForm({}); // Add this line
 const showEarlyReturnDialog = ref(false);
 
 const handleInitiateReturn = () => {
@@ -279,6 +280,26 @@ const canShowHandover = computed(() => {
 const selectedPickupSchedule = computed(() =>
 	props.rental.pickup_schedules?.find((s) => s.is_selected && s.is_confirmed)
 );
+
+// Add new computed property for confirm schedule button visibility
+const showConfirmReturnScheduleButton = computed(() => {
+  const hasUnconfirmedSchedule = props.rental.return_schedules?.some(s => 
+    s.is_selected && !s.is_confirmed
+  );
+  return props.userRole === 'lender' && hasUnconfirmedSchedule;
+});
+
+// Add the handleConfirmSchedule function
+const handleConfirmSchedule = () => {
+  confirmForm.patch(route('return-schedules.confirm', {
+    rental: props.rental.id
+  }), {
+    preserveScroll: true,
+    onSuccess: () => {
+      console.log('Return schedule confirmed successfully');
+    }
+  });
+};
 </script>
 
 <template>
@@ -788,6 +809,17 @@ const selectedPickupSchedule = computed(() =>
 					</CardHeader>
 					<CardContent class="p-6">
 						<div class="space-y-4">
+							 <!-- Add the Confirm Return Schedule button -->
+							 <Button
+								v-if="showConfirmReturnScheduleButton"
+								variant="default"
+								class="w-full"
+								@click="handleConfirmSchedule"
+								:disabled="confirmForm.processing"
+							>
+								Confirm Return Schedule
+							</Button>
+
 							<!-- Payment Actions -->
 							<Button
 								v-if="actions.canPayNow"
@@ -975,7 +1007,8 @@ const selectedPickupSchedule = computed(() =>
 									!actions.canChoosePickupSchedule &&
 									!actions.canRaiseDispute &&
 									!showReturnScheduleButton &&
-									!actions.canInitiateReturn
+									!actions.canInitiateReturn &&
+									!showConfirmReturnScheduleButton
 								"
 								class="text-muted-foreground text-sm text-center"
 							>
