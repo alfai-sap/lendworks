@@ -1071,10 +1071,7 @@ const handleConfirmSchedule = () => {
 				</Card>
 
 				<Card
-					v-if="
-						props.rental.status === 'completed_pending_payments' ||
-						props.rental.status === 'completed_with_payments'
-					"
+					v-if="props.rental.status === 'completed_pending_payments' || props.rental.status === 'completed_with_payments'"
 					class="shadow-sm"
 				>
 					<CardHeader class="bg-card border-b">
@@ -1082,47 +1079,61 @@ const handleConfirmSchedule = () => {
 					</CardHeader>
 					<CardContent class="p-6">
 						<div v-if="userRole === 'lender'" class="space-y-4">
-							<h3 class="font-medium">Payment Processing</h3>
-							<p class="text-muted-foreground text-sm">
-								Your payment is being processed by the admin. You will be notified once
-								the payment has been sent.
-							</p>
-							<div v-if="lenderPayment" class="bg-muted p-4 mt-4 rounded-lg">
-								<p class="text-sm font-medium">Payment Processed</p>
-								<p class="text-muted-foreground mt-1 text-sm">
-									Reference: {{ lenderPayment.reference_number }}
+							<template v-if="lenderPayment">
+								<div class="bg-muted p-4 rounded-lg">
+									<div class="flex items-center justify-between">
+										<p class="text-sm font-medium">Payment Processed Successfully</p>
+										<span class="text-emerald-500 text-xs font-medium">✓ Completed</span>
+									</div>
+									<p class="text-muted-foreground mt-2 text-sm">
+										Reference: {{ lenderPayment.reference_number }}
+									</p>
+									<Button
+										variant="outline"
+										size="sm"
+										class="mt-3"
+										@click="showPaymentProof(lenderPayment)"
+									>
+										View Payment Proof
+									</Button>
+								</div>
+							</template>
+							<template v-else>
+								<h3 class="font-medium">Payment Processing</h3>
+								<p class="text-muted-foreground text-sm">
+									Your payment is being processed by the admin. You will be notified once
+									the payment has been sent.
 								</p>
-								<Button
-									variant="outline"
-									size="sm"
-									class="mt-2"
-									@click="showPaymentProof(lenderPayment)"
-								>
-									View Payment Proof
-								</Button>
-							</div>
+							</template>
 						</div>
 
 						<div v-if="userRole === 'renter'" class="space-y-4">
-							<h3 class="font-medium">Deposit Refund Status</h3>
-							<p class="text-muted-foreground text-sm">
-								Your security deposit refund is being processed. You will be notified once
-								it has been sent.
-							</p>
-							<div v-if="depositRefund" class="bg-muted p-4 mt-4 rounded-lg">
-								<p class="text-sm font-medium">Refund Processed</p>
-								<p class="text-muted-foreground mt-1 text-sm">
-									Reference: {{ depositRefund.reference_number }}
+							<template v-if="depositRefund">
+								<div class="bg-muted p-4 rounded-lg">
+									<div class="flex items-center justify-between">
+										<p class="text-sm font-medium">Security Deposit Refunded</p>
+										<span class="text-emerald-500 text-xs font-medium">✓ Completed</span>
+									</div>
+									<p class="text-muted-foreground mt-2 text-sm">
+										Reference: {{ depositRefund.reference_number }}
+									</p>
+									<Button
+										variant="outline"
+										size="sm"
+										class="mt-3"
+										@click="showPaymentProof(depositRefund)"
+									>
+										View Refund Proof
+									</Button>
+								</div>
+							</template>
+							<template v-else>
+								<h3 class="font-medium">Deposit Refund Status</h3>
+								<p class="text-muted-foreground text-sm">
+									Your security deposit refund is being processed. You will be notified once
+									it has been sent.
 								</p>
-								<Button
-									variant="outline"
-									size="sm"
-									class="mt-2"
-									@click="showPaymentProof(depositRefund)"
-								>
-									View Refund Proof
-								</Button>
-							</div>
+							</template>
 						</div>
 					</CardContent>
 				</Card>
