@@ -633,12 +633,6 @@ const hasRejectedOverduePayment = computed(() => overduePaymentStatus.value === 
 										>
 											Pay Overdue Fees
 										</Button>
-										<Button 
-											variant="outline" 
-											disabled
-										>
-											Initiate Return
-										</Button>
 									</div>
 								</template>
 
@@ -676,12 +670,6 @@ const hasRejectedOverduePayment = computed(() => overduePaymentStatus.value === 
 											@click="showOverduePayment = true"
 										>
 											Submit New Payment
-										</Button>
-										<Button 
-											variant="outline" 
-											disabled
-										>
-											Initiate Return
 										</Button>
 									</div>
 								</template>
