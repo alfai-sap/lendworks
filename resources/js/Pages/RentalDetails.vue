@@ -303,6 +303,17 @@ const handleConfirmSchedule = () => {
     }
   });
 };
+
+// Add these computed properties after other computed properties
+const overduePaymentRequest = computed(() => 
+  props.rental.payment_request?.type === 'overdue' ? props.rental.payment_request : null
+);
+
+const overduePaymentStatus = computed(() => overduePaymentRequest.value?.status || null);
+
+const hasPendingOverduePayment = computed(() => overduePaymentStatus.value === 'pending');
+const hasVerifiedOverduePayment = computed(() => overduePaymentStatus.value === 'verified');
+const hasRejectedOverduePayment = computed(() => overduePaymentStatus.value === 'rejected');
 </script>
 
 <template>
@@ -560,8 +571,8 @@ const handleConfirmSchedule = () => {
 
 							<Separator />
 
-							<!-- Enhanced Fee Breakdown -->
-							<div class="space-y-4">
+							 <!-- Fee Breakdown -->
+							 <div class="space-y-4">
 								<h4 class="font-medium">Fee Breakdown</h4>
 								<div class="space-y-4">
 									<!-- Daily Rate and Quantity -->
@@ -576,7 +587,7 @@ const handleConfirmSchedule = () => {
 										<span>{{
 											formatNumber(
 												rental.listing.price *
-													(rental.quantity_approved || rental.quantity_requested)
+												(rental.quantity_approved || rental.quantity_requested)
 											)
 										}}</span>
 									</div>
@@ -604,10 +615,10 @@ const handleConfirmSchedule = () => {
 								</div>
 							</div>
 
-							 <!-- Different views for renter -->
-							 <template v-if="userRole === 'renter'">
+							<!-- Payment Status Section -->
+							<template v-if="userRole === 'renter'">
 								<!-- Initial unpaid state -->
-								<template v-if="!rental.overdue_payment?.verified_at && !payment_request">
+								<template v-if="!rental.overdue_payment?.verified_at && !overduePaymentRequest">
 									<Alert variant="destructive">
 										<AlertDescription class="space-y-2">
 											<p>This rental is overdue. Please pay the overdue fees to proceed with the return process.</p>
@@ -631,12 +642,124 @@ const handleConfirmSchedule = () => {
 									</div>
 								</template>
 
-								<!-- Add PayOverdueDialog component -->
-								<PayOverdueDialog
-									v-if="userRole === 'renter'"
-									v-model:show="showOverduePayment"
-									:rental="rental"
-								/>
+								 <!-- Pending verification state -->
+								 <template v-else-if="hasPendingOverduePayment">
+									<Alert variant="warning">
+										<AlertDescription class="space-y-2">
+											<p>Your overdue payment has been submitted and is pending verification.</p>
+											<p class="font-medium mt-2">
+												Reference Number: {{ overduePaymentRequest.reference_number }}
+											</p>
+											<p class="font-medium">Amount Paid: {{ formatNumber(rental.overdue_fee) }}</p>
+										</AlertDescription>
+									</Alert>
+									<div class="mt-4 p-4 bg-muted rounded-lg">
+										<p class="text-sm text-muted-foreground text-center">
+											Please wait while we verify your payment. You will be notified once verified.
+										</p>
+									</div>
+								</template>
+
+								<!-- Rejected payment state -->
+								<template v-else-if="hasRejectedOverduePayment">
+									<Alert variant="destructive">
+										<AlertDescription class="space-y-2">
+											<p>Your overdue payment was rejected for the following reason:</p>
+											<p class="font-medium mt-2">{{ overduePaymentRequest.admin_feedback }}</p>
+											<p class="mt-2">Please submit a new payment with the correct details.</p>
+										</AlertDescription>
+									</Alert>
+									
+									<div class="flex gap-2 mt-4">
+										<Button 
+											variant="default" 
+											@click="showOverduePayment = true"
+										>
+											Submit New Payment
+										</Button>
+										<Button 
+											variant="outline" 
+											disabled
+										>
+											Initiate Return
+										</Button>
+									</div>
+								</template>
+
+								<!-- Verified payment state -->
+								<template v-else-if="hasVerifiedOverduePayment">
+									<Alert variant="success">
+										<AlertDescription class="space-y-2">
+											<p>Your overdue payment has been verified successfully!</p>
+											<p class="font-medium">Payment Details:</p>
+											<ul class="space-y-1 mt-2">
+												<li>Reference: {{ overduePaymentRequest.reference_number }}</li>
+												<li>Amount: {{ formatNumber(rental.overdue_fee) }}</li>
+												<li>Verified: {{ formatDateTime(overduePaymentRequest.verified_at) }}</li>
+											</ul>
+										</AlertDescription>
+									</Alert>
+								</template>
+							</template>
+
+							<!-- Lender view -->
+							<template v-else>
+								<template v-if="!overduePaymentRequest">
+									<Alert variant="warning">
+										<AlertDescription class="space-y-2">
+											<p>This rental is overdue. Waiting for the renter to submit the overdue payment.</p>
+											<p class="font-medium">Outstanding Fee: {{ formatNumber(rental.overdue_fee) }}</p>
+										</AlertDescription>
+									</Alert>
+								</template>
+
+								<template v-else-if="hasPendingOverduePayment">
+									<Alert variant="warning">
+										<AlertDescription class="space-y-2">
+											<p>The renter has submitted an overdue payment.</p>
+											<p class="font-medium mt-2">
+												Reference Number: {{ overduePaymentRequest.reference_number }}
+											</p>
+											<p class="font-medium">Amount: {{ formatNumber(rental.overdue_fee) }}</p>
+										</AlertDescription>
+									</Alert>
+									<div class="mt-4 p-4 bg-muted rounded-lg">
+										<p class="text-sm text-muted-foreground text-center">
+											Please wait for admin verification before proceeding with the return process.
+										</p>
+									</div>
+								</template>
+
+								<template v-else-if="hasRejectedOverduePayment">
+									<Alert variant="destructive">
+										<AlertDescription class="space-y-2">
+											<p>The renter's overdue payment was rejected by admin:</p>
+											<p class="font-medium mt-2">{{ overduePaymentRequest.admin_feedback }}</p>
+											<p class="mt-2">The renter will need to submit a new payment.</p>
+											<p class="font-medium mt-2">Outstanding Fee: {{ formatNumber(rental.overdue_fee) }}</p>
+										</AlertDescription>
+									</Alert>
+									<div class="mt-4 p-4 bg-muted rounded-lg">
+										<p class="text-sm text-muted-foreground text-center">
+											Waiting for the renter to submit a new payment...
+										</p>
+									</div>
+								</template>
+
+								<template v-else-if="hasVerifiedOverduePayment">
+									<Alert variant="success">
+										<AlertDescription class="space-y-2">
+											<p>The renter's overdue payment has been verified.</p>
+											<p>The return process can begin once the renter initiates it.</p>
+											<p class="font-medium mt-2">Verified Payment Details:</p>
+											<ul class="space-y-1 mt-1">
+												<li>Reference: {{ overduePaymentRequest.reference_number }}</li>
+												<li>Amount: {{ formatNumber(rental.overdue_fee) }}</li>
+												<li>Verified: {{ formatDateTime(overduePaymentRequest.verified_at) }}</li>
+											</ul>
+										</AlertDescription>
+									</Alert>
+								</template>
 							</template>
 						</div>
 					</CardContent>
@@ -1298,16 +1421,16 @@ const handleConfirmSchedule = () => {
 												{{ rental.dispute.description }}
 											</p>
 										</div>
-									</div>
 
-									<!-- Admin's verdict -->
-									<div class="space-y-2">
-										<h4 class="font-medium">Admin's Decision</h4>
+										<!-- Admin's verdict -->
 										<div class="space-y-2">
-											<p class="text-sm">{{ rental.dispute.verdict }}</p>
-											<p class="text-muted-foreground text-sm">
-												{{ rental.dispute.verdict_notes }}
-											</p>
+											<h4 class="font-medium">Admin's Decision</h4>
+											<div class="space-y-2">
+												<p class="text-sm">{{ rental.dispute.verdict }}</p>
+												<p class="text-muted-foreground text-sm">
+													{{ rental.dispute.verdict_notes }}
+												</p>
+											</div>
 										</div>
 									</div>
 								</div>
@@ -1545,4 +1668,11 @@ const handleConfirmSchedule = () => {
 			</div>
 		</div>
 	</ConfirmDialog>
+
+	<!-- Add this dialog before the end of template -->
+	<PayOverdueDialog
+		v-if="userRole === 'renter'"
+		v-model:show="showOverduePayment"
+		:rental="rental"
+	/>
 </template>
