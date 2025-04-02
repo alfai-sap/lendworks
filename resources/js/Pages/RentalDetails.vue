@@ -625,15 +625,6 @@ const hasRejectedOverduePayment = computed(() => overduePaymentStatus.value === 
 											<p class="font-medium">Overdue Fee: {{ formatNumber(rental.overdue_fee) }}</p>
 										</AlertDescription>
 									</Alert>
-									
-									<div class="flex gap-2 mt-4">
-										<Button 
-											variant="default" 
-											@click="showOverduePayment = true"
-										>
-											Pay Overdue Fees
-										</Button>
-									</div>
 								</template>
 
 								 <!-- Pending verification state -->
@@ -663,15 +654,6 @@ const hasRejectedOverduePayment = computed(() => overduePaymentStatus.value === 
 											<p class="mt-2">Please submit a new payment with the correct details.</p>
 										</AlertDescription>
 									</Alert>
-									
-									<div class="flex gap-2 mt-4">
-										<Button 
-											variant="default" 
-											@click="showOverduePayment = true"
-										>
-											Submit New Payment
-										</Button>
-									</div>
 								</template>
 
 								<!-- Verified payment state -->
@@ -924,8 +906,31 @@ const hasRejectedOverduePayment = computed(() => overduePaymentStatus.value === 
 					</CardHeader>
 					<CardContent class="p-6">
 						<div class="space-y-4">
-							 <!-- Add the Confirm Return Schedule button -->
-							 <Button
+							 <!-- Overdue Payment Actions -->
+							 <template v-if="rental.is_overdue && userRole === 'renter'">
+								<!-- Show initial payment button only when no payment exists -->
+								<Button
+									v-if="!overduePaymentRequest"
+									variant="default"
+									class="w-full"
+									@click="showOverduePayment = true"
+								>
+									Pay Overdue Fees
+								</Button>
+
+								<!-- Show new payment button only when previous payment was rejected -->
+								<Button
+									v-if="hasRejectedOverduePayment"
+									variant="default"
+									class="w-full"
+									@click="showOverduePayment = true"
+								>
+									Resubmit Overdue Payment
+								</Button>
+							</template>
+
+							<!-- Rest of action buttons -->
+							<Button
 								v-if="showConfirmReturnScheduleButton"
 								variant="default"
 								class="w-full"
@@ -1123,8 +1128,8 @@ const hasRejectedOverduePayment = computed(() => overduePaymentStatus.value === 
 									!actions.canRaiseDispute &&
 									!showReturnScheduleButton &&
 									!actions.canInitiateReturn &&
-									!showConfirmReturnScheduleButton
-								"
+									!showConfirmReturnScheduleButton &&
+									!(rental.is_overdue && userRole === 'renter' && !hasVerifiedOverduePayment)"
 								class="text-muted-foreground text-sm text-center"
 							>
 								No actions available at this time.
@@ -1575,85 +1580,39 @@ const hasRejectedOverduePayment = computed(() => overduePaymentStatus.value === 
 	<!-- Early Return Dialog -->
 	<ConfirmDialog
 		v-model:show="showEarlyReturnDialog"
-		title="Early Return Request"
-		description="Please review these important details"
-		confirmLabel="Yes, Start Return Process"
-		cancelLabel="No, Keep Renting"
+		title="Start Return Process"
+		description="You are about to start the return process. Please review the return information below."
+		confirmLabel="Start Return Process"
+		cancelLabel="Cancel"
 		:processing="initiateForm.processing"
 		@confirm="proceedWithReturn"
 		@cancel="showEarlyReturnDialog = false"
 	>
-		<div class="space-y-6 mb-4">
-			<!-- Current Rental Status -->
-			<div class="bg-amber-50 p-4 rounded-lg space-y-2">
-				<p class="text-amber-600 text-sm font-medium">
-					Original End Date: {{ formatDateTime(rental.end_date, "MMMM D, YYYY") }}
+		<!-- Return Process Information -->
+		<div class="space-y-4 mb-4">
+			<!-- Return Notice -->
+			<div class="bg-muted p-4 rounded-lg space-y-2">
+				<p class="text-sm text-muted-foreground">
+					Once you start the return process:
 				</p>
-				<p class="text-amber-700 text-sm font-semibold">
-					{{ rental.remaining_days }} days remaining in your rental period
-				</p>
-				<p class="text-amber-600 text-sm">
-					Non-refundable amount: {{ formatNumber((rental.remaining_days/rentalDays) * rentalOnlyTotal) }}
-				</p>
-			</div>
-
-			<!-- Important Notices -->
-			<div class="border border-destructive/20 bg-destructive/5 p-4 rounded-lg">
-				<h4 class="font-medium text-sm text-destructive mb-2">⚠️ Important Notice:</h4>
-				<ul class="space-y-2 text-sm text-destructive/90">
-					<li class="flex items-start gap-2">
-						<span>•</span>
-						<span>This action <strong>cannot be undone</strong> once initiated</span>
-					</li>
-					<li class="flex items-start gap-2">
-						<span>•</span>
-						<span>No refunds will be provided for unused rental days</span>
-					</li>
-					<li class="flex items-start gap-2">
-						<span>•</span>
-						<span>Click "No, Keep Renting" if this was clicked by mistake</span>
-					</li>
+				<ul class="text-sm text-muted-foreground space-y-1 mt-2">
+					<li>• You'll need to select a return schedule</li>
+					<li>• The lender will need to confirm your selected schedule</li>
+					<li>• You'll meet at the agreed location for the return</li>
 				</ul>
 			</div>
 
-			<!-- Process Steps -->
-			<div class="space-y-4">
-				<div class="flex items-start gap-3">
-					<div class="mt-1 p-1.5 bg-primary/10 text-primary rounded-lg">
-						<Package class="w-4 h-4" />
-					</div>
-					<div>
-						<p class="font-medium text-sm">Next Steps</p>
-						<p class="text-muted-foreground text-sm">
-							1. Select a return schedule<br>
-							2. Wait for lender confirmation<br>
-							3. Return item during scheduled time
-						</p>
-					</div>
-				</div>
-
-				<div class="flex items-start gap-3">
-					<div class="mt-1 p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
-						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield-check"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>
-					</div>
-					<div>
-						<p class="font-medium text-sm">Security Deposit</p>
-						<p class="text-muted-foreground text-sm">
-							Your security deposit of {{ formatNumber(rental.deposit_fee) }} will be returned after verification
-						</p>
-					</div>
-				</div>
-			</div>
-
-			<!-- Final Confirmation -->
-			<div class="bg-muted/30 p-4 rounded-lg">
-				<p class="text-sm font-medium text-center">
-					Are you sure you want to proceed with the early return?
-				</p>
-				<p class="text-xs text-muted-foreground text-center mt-1">
-					Click "No, Keep Renting" to continue with your rental as planned
-				</p>
-			</div>
+			<!-- Early Return Disclaimer -->
+			<Alert v-if="rental.remaining_days > 0" variant="warning">
+				<AlertDescription class="space-y-2">
+					<p class="text-sm font-medium">Early Return Notice</p>
+					<p class="text-sm text-muted-foreground">
+						You are initiating a return {{ rental.remaining_days }} days before the end date 
+						({{ formatDateTime(rental.end_date, "MMMM D, YYYY") }}). Please note that no refunds 
+						will be provided for unused rental days.
+					</p>
+				</AlertDescription>
+			</Alert>
 		</div>
 	</ConfirmDialog>
 

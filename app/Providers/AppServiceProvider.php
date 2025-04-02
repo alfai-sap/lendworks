@@ -9,7 +9,7 @@ class AppServiceProvider extends ServiceProvider
 {
     // Toggle this to enable/disable the time shift
     protected static $timeShiftEnabled = true; // Enable (true) , Disable (False)
-    protected static $daysToAdd = 10; // Advance number of days
+    protected static $daysToAdd = 5; // Advance number of days
 
     /**
      * Register any application services.
