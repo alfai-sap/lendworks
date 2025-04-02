@@ -23,6 +23,8 @@ import DisputeDialog from "@/Components/DisputeDialog.vue";
 import PickupScheduleDialog from "@/Components/PickupScheduleDialog.vue";
 import { format } from "date-fns";
 import ReturnScheduleDialog from "@/Components/ReturnScheduleDialog.vue";
+import PayOverdueDialog from "@/Components/PayOverdueDialog.vue";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const props = defineProps({
 	rental: Object,
@@ -75,6 +77,7 @@ const showDisputeDialog = ref(false);
 const showScheduleDialog = ref(false);
 const showReturnScheduleDialog = ref(false);
 const showPickupDialog = ref(false);
+const showOverduePayment = ref(false);
 
 // Forms
 const approveForm = useForm({
@@ -92,7 +95,7 @@ const cancelForm = useForm({
 });
 
 const initiateForm = useForm({});
-const confirmForm = useForm({}); // Add this line
+const confirmForm = useForm({});
 const showEarlyReturnDialog = ref(false);
 
 const handleInitiateReturn = () => {
@@ -601,39 +604,40 @@ const handleConfirmSchedule = () => {
 								</div>
 							</div>
 
-							<!-- Payment Status -->
-							<div v-if="rental.overdue_payment" class="bg-muted p-4 mt-4 rounded-lg">
-								<h4 class="mb-3 text-sm font-medium">Payment Status</h4>
-								<div class="space-y-2">
-									<div class="flex justify-between text-sm">
-										<span class="text-muted-foreground">Status</span>
-										<span class="text-emerald-500">Verified</span>
+							 <!-- Different views for renter -->
+							 <template v-if="userRole === 'renter'">
+								<!-- Initial unpaid state -->
+								<template v-if="!rental.overdue_payment?.verified_at && !payment_request">
+									<Alert variant="destructive">
+										<AlertDescription class="space-y-2">
+											<p>This rental is overdue. Please pay the overdue fees to proceed with the return process.</p>
+											<p class="font-medium">Overdue Fee: {{ formatNumber(rental.overdue_fee) }}</p>
+										</AlertDescription>
+									</Alert>
+									
+									<div class="flex gap-2 mt-4">
+										<Button 
+											variant="default" 
+											@click="showOverduePayment = true"
+										>
+											Pay Overdue Fees
+										</Button>
+										<Button 
+											variant="outline" 
+											disabled
+										>
+											Initiate Return
+										</Button>
 									</div>
-									<div class="flex justify-between text-sm">
-										<span class="text-muted-foreground">Verified On</span>
-										<span>{{ formatDateTime(rental.overdue_payment.verified_at) }}</span>
-									</div>
-									<div class="flex justify-between text-sm">
-										<span class="text-muted-foreground">Reference</span>
-										<span>{{ rental.overdue_payment.reference_number }}</span>
-									</div>
-								</div>
-							</div>
+								</template>
 
-							<!-- Warning for unpaid overdue -->
-							<div
-								v-else-if="!rental.overdue_payment"
-								class="bg-destructive/10 p-4 mt-4 rounded-lg"
-							>
-								<p class="text-destructive text-sm">
-									 ⚠️ Overdue payment must be settled before proceeding with the return
-									process
-								</p>
-								<p class="text-muted-foreground mt-2 text-xs">
-									The total overdue fee is calculated based on your daily rental rate
-									multiplied by the number of overdue days.
-								</p>
-							</div>
+								<!-- Add PayOverdueDialog component -->
+								<PayOverdueDialog
+									v-if="userRole === 'renter'"
+									v-model:show="showOverduePayment"
+									:rental="rental"
+								/>
+							</template>
 						</div>
 					</CardContent>
 				</Card>
