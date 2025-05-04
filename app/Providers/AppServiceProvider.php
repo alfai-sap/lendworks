@@ -8,7 +8,7 @@ use Carbon\Carbon;
 class AppServiceProvider extends ServiceProvider
 {
     // Toggle this to enable/disable the time shift
-    protected static $timeShiftEnabled = true; // Enable (true) , Disable (False)
+    protected static $timeShiftEnabled = False; // Enable (true) , Disable (False)
     protected static $daysToAdd = 5; // Advance number of days
 
     /**
